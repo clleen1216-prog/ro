@@ -1,0 +1,829 @@
+import { sfxBow, sfxCast, sfxDown, sfxFoot, sfxHeal, sfxHit, sfxMiss, sfxPickup, sfxPortal, sfxSwing } from "@/game/audio";
+import { ITEMS, MONSTERS, SKILLS, TILE, getMap, isBlocked } from "@/game/content";
+import type { Dir, Monster, SkillId } from "@/game/types";
+import { burst, derive, enterMap, float, grantKill, openNpc, world } from "@/game/world";
+
+function held() {
+  return world.qaKeys ?? world.keys;
+}
+
+function tileOf(x: number, y: number) {
+  return { tx: Math.floor(x / TILE), ty: Math.floor(y / TILE) };
+}
+
+function lineClear(x0: number, y0: number, x1: number, y1: number) {
+  const map = getMap(world.mapId);
+  const distPx = Math.hypot(x1 - x0, y1 - y0);
+  const steps = Math.max(1, Math.ceil(distPx / 10));
+  for (let i = 1; i <= steps; i++) {
+    const t = i / steps;
+    if (isBlocked(map, x0 + (x1 - x0) * t, y0 + (y1 - y0) * t)) return false;
+  }
+  return true;
+}
+
+function smoothPath(start: { x: number; y: number }, pts: { x: number; y: number }[]) {
+  const all = [start, ...pts];
+  if (all.length <= 2) return pts;
+  const kept: { x: number; y: number }[] = [];
+  let i = 0;
+  while (i < all.length - 1) {
+    let j = all.length - 1;
+    while (j > i + 1 && !lineClear(all[i]!.x, all[i]!.y, all[j]!.x, all[j]!.y)) j--;
+    kept.push(all[j]!);
+    i = j;
+  }
+  return kept;
+}
+
+function pathTo(x: number, y: number) {
+  const map = getMap(world.mapId);
+  const p = world.player;
+  if (!p) return [] as { x: number; y: number }[];
+  const nearest = (sx: number, sy: number) => {
+    if (!isBlocked(map, (sx + 0.5) * TILE, (sy + 0.5) * TILE)) return { x: sx, y: sy };
+    for (let r = 1; r <= 5; r++) {
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+          const nx = sx + dx;
+          const ny = sy + dy;
+          if (!isBlocked(map, (nx + 0.5) * TILE, (ny + 0.5) * TILE)) return { x: nx, y: ny };
+        }
+      }
+    }
+    return { x: sx, y: sy };
+  };
+  const start = tileOf(p.x, p.y);
+  const goal = nearest(Math.floor(x / TILE), Math.floor(y / TILE));
+  const gx = goal.x;
+  const gy = goal.y;
+  const exact =
+    !isBlocked(map, x, y) && Math.floor(x / TILE) === gx && Math.floor(y / TILE) === gy
+      ? { x, y }
+      : { x: (gx + 0.5) * TILE, y: (gy + 0.5) * TILE };
+  if (start.tx === gx && start.ty === gy) return [exact];
+  const cols = map.cols;
+  const rows = map.rows;
+  const key = (tx: number, ty: number) => ty * cols + tx;
+  const blocked = (tx: number, ty: number) =>
+    tx < 0 || ty < 0 || tx >= cols || ty >= rows || isBlocked(map, (tx + 0.5) * TILE, (ty + 0.5) * TILE);
+  const heuristic = (tx: number, ty: number) => {
+    const dx = Math.abs(tx - gx);
+    const dy = Math.abs(ty - gy);
+    const diag = Math.min(dx, dy);
+    return diag * 1.414 + (Math.max(dx, dy) - diag);
+  };
+  const startK = key(start.tx, start.ty);
+  const goalK = key(gx, gy);
+  const gscore = new Map<number, number>([[startK, 0]]);
+  const parent = new Map<number, number>();
+  const open = [startK];
+  const closed = new Set<number>();
+  const dirs = [
+    [1, 0],
+    [-1, 0],
+    [0, 1],
+    [0, -1],
+    [1, 1],
+    [1, -1],
+    [-1, 1],
+    [-1, -1],
+  ];
+  let guard = 0;
+  while (open.length && guard < 4000) {
+    guard++;
+    let bestI = 0;
+    let bestF = Infinity;
+    for (let i = 0; i < open.length; i++) {
+      const k = open[i]!;
+      const tx = k % cols;
+      const ty = (k / cols) | 0;
+      const f = (gscore.get(k) ?? 0) + heuristic(tx, ty);
+      if (f < bestF) {
+        bestF = f;
+        bestI = i;
+      }
+    }
+    const cur = open.splice(bestI, 1)[0]!;
+    if (closed.has(cur)) continue;
+    closed.add(cur);
+    if (cur === goalK) {
+      const pts: { x: number; y: number }[] = [];
+      let walk: number | undefined = cur;
+      while (walk !== undefined && walk !== startK) {
+        const wx = walk % cols;
+        const wy = (walk / cols) | 0;
+        pts.push({ x: (wx + 0.5) * TILE, y: (wy + 0.5) * TILE });
+        walk = parent.get(walk);
+      }
+      pts.reverse();
+      if (pts.length) pts[pts.length - 1] = exact;
+      return smoothPath({ x: p.x, y: p.y }, pts);
+    }
+    const cx = cur % cols;
+    const cy = (cur / cols) | 0;
+    for (const [dx, dy] of dirs) {
+      const nx = cx + dx!;
+      const ny = cy + dy!;
+      if (blocked(nx, ny)) continue;
+      if (dx !== 0 && dy !== 0 && (blocked(cx + dx!, cy) || blocked(cx, cy + dy!))) continue;
+      const nk = key(nx, ny);
+      if (closed.has(nk)) continue;
+      const cost = (gscore.get(cur) ?? 0) + (dx !== 0 && dy !== 0 ? 1.414 : 1);
+      if (cost < (gscore.get(nk) ?? 1e9)) {
+        gscore.set(nk, cost);
+        parent.set(nk, cur);
+        open.push(nk);
+      }
+    }
+  }
+  return [];
+}
+
+function face(dx: number, dy: number): Dir {
+  if (Math.abs(dx) > Math.abs(dy)) return dx < 0 ? 1 : 2;
+  return dy < 0 ? 3 : 0;
+}
+
+function faceHold(dx: number, dy: number, prev: Dir): Dir {
+  const ax = Math.abs(dx);
+  const ay = Math.abs(dy);
+  if (ax > ay * 1.35) return dx < 0 ? 1 : 2;
+  if (ay > ax * 1.35) return dy < 0 ? 3 : 0;
+  return prev;
+}
+
+function travel(dx: number, dy: number, dist: number) {
+  const p = world.player;
+  if (!p || dist <= 0) return 0;
+  const map = getMap(world.mapId);
+  const len = Math.hypot(dx, dy) || 1;
+  const vx = (dx / len) * dist;
+  const vy = (dy / len) * dist;
+  const ox = p.x;
+  const oy = p.y;
+  let slid = false;
+  if (!isBlocked(map, p.x + vx, p.y)) {
+    p.x += vx;
+    slid = true;
+  }
+  if (!isBlocked(map, p.x, p.y + vy)) {
+    p.y += vy;
+    slid = true;
+  }
+  if (slid) p.dir = faceHold(vx, vy, p.dir);
+  return Math.hypot(p.x - ox, p.y - oy);
+}
+
+function followPath(budget: number) {
+  const p = world.player;
+  if (!p) return 0;
+  let moved = 0;
+  let guard = 0;
+  while (budget > 0.25 && world.path.length && guard < 8) {
+    guard++;
+    const pt = world.path[0]!;
+    const dx = pt.x - p.x;
+    const dy = pt.y - p.y;
+    const len = Math.hypot(dx, dy);
+    if (len < 4) {
+      world.path.shift();
+      continue;
+    }
+    const stepLen = Math.min(budget, len);
+    const got = travel(dx, dy, stepLen);
+    if (got < 0.35) {
+      world.path = [];
+      world.repath = 0.28;
+      break;
+    }
+    moved += got;
+    budget -= stepLen;
+    if (Math.hypot(pt.x - p.x, pt.y - p.y) < 4) world.path.shift();
+  }
+  return moved;
+}
+
+function noteSteps(movedPx: number) {
+  const p = world.player;
+  if (!p) return;
+  if (movedPx > 0.4) {
+    p.anim += movedPx / 28;
+    world.foot += movedPx;
+    if (world.foot > 54) {
+      world.foot = 0;
+      sfxFoot();
+    }
+  }
+}
+
+function dist(ax: number, ay: number, bx: number, by: number) {
+  return Math.hypot(ax - bx, ay - by);
+}
+
+function monsterById(id: string | null) {
+  if (!id) return null;
+  return world.monsters.find((m) => m.id === id && m.alive) ?? null;
+}
+
+export function basicAttack() {
+  const p = world.player;
+  if (!p || p.downFor > 0) return;
+  const target = monsterById(world.targetId);
+  if (!target) return;
+  const d = derive(p);
+  if (dist(p.x, p.y, target.x, target.y) > d.range + 8) return;
+  if (p.attackCd > 0) return;
+  p.sit = false;
+  p.feign = 0;
+  p.dir = face(target.x - p.x, target.y - p.y);
+  p.attackCd = d.aspd;
+  p.swing = 0.18;
+  const weapon = p.eq.weapon ? ITEMS[p.eq.weapon] : undefined;
+  if (weapon?.weapon === "bow") sfxBow();
+  else if (weapon?.weapon === "staff") sfxCast();
+  else sfxSwing();
+  const hitChance = Math.max(0.25, Math.min(0.97, d.hit / (d.hit + 8 + MONSTERS[target.kind].level * 2)));
+  if (Math.random() > hitChance) {
+    float(target.x, target.y - 56, "Miss", "#b7ad9c");
+    sfxMiss();
+    return;
+  }
+  let raw = d.atk - MONSTERS[target.kind].def * 0.55;
+  raw *= 0.9 + Math.random() * 0.2;
+  let crit = false;
+  if (Math.random() * 100 < d.crit) {
+    raw *= 1.7;
+    crit = true;
+  }
+  const dmg = Math.max(1, Math.round(raw));
+  hurtMonster(target, dmg, crit ? "#e4b15a" : "#f6f0e4");
+  sfxHit();
+  world.shake = Math.min(5, world.shake + (crit ? 3 : 1.4));
+}
+
+function hurtMonster(m: Monster, dmg: number, color: string) {
+  m.hp -= dmg;
+  m.hurt = 0.18;
+  m.aggro = MONSTERS[m.kind].behavior !== "skittish";
+  burst(m.x, m.y - 36, color);
+  float(m.x, m.y - 64, String(dmg), color);
+  if (m.hp <= 0) {
+    m.alive = false;
+    m.deadUntil = 10;
+    grantKill(m.kind);
+    world.targetId = world.targetId === m.id ? null : world.targetId;
+  }
+}
+
+export function castSkill(id: SkillId) {
+  const p = world.player;
+  if (!p || p.downFor > 0) return;
+  const sk = SKILLS[id];
+  if (!sk) return;
+  const lv = p.skills[id] ?? 0;
+  if (lv <= 0) return;
+  if (sk.target === "passive") return;
+  const cost = sk.sp + Math.max(0, lv - 1) * 2;
+  if (p.sp < cost) {
+    float(p.x, p.y - 50, "No SP", "#3d8fd1");
+    return;
+  }
+  const d = derive(p);
+  if (sk.target !== "self") {
+    let target = monsterById(world.targetId);
+    if (!target) {
+      target = nearestMonster(sk.target === "area" ? 160 : d.range + 20);
+      if (target) world.targetId = target.id;
+    }
+    if (!target && sk.target === "enemy") {
+      float(p.x, p.y - 50, "No target", "#f6f0e4");
+      return;
+    }
+    if (target && sk.target === "enemy" && dist(p.x, p.y, target.x, target.y) > d.range + 24) {
+      world.path = pathTo(target.x, target.y);
+      return;
+    }
+  }
+  p.sp -= cost;
+  p.sit = false;
+  p.feign = 0;
+  p.attackCd = Math.max(p.attackCd, d.aspd * 0.75);
+  p.swing = 0.16;
+  sfxCast();
+  const target = monsterById(world.targetId);
+  if (id === "firstAid") healSelf(8 + p.baseLevel * 3);
+  else if (id === "playDead") {
+    p.feign = 5.5;
+    p.sit = true;
+    p.swing = 0;
+    world.targetId = null;
+    world.path = [];
+    for (const m of world.monsters) m.aggro = false;
+    float(p.x, p.y - 50, "…", "#b7ad9c");
+  } else if (id === "guard") {
+    addBuff("def", 4 + 3 * lv, 10 + 4 * lv);
+    p.invuln = Math.max(p.invuln, 0.12 * lv);
+  } else if (id === "focus") {
+    addBuff("hit", 8 + 5 * lv, 20);
+    addBuff("flee", 6 + 4 * lv, 20);
+  } else if (id === "arcCut" && target) {
+    p.dir = face(target.x - p.x, target.y - p.y);
+    const hitChance = Math.min(0.98, 0.55 + lv * 0.08 + d.hit / 400);
+    if (Math.random() > hitChance) {
+      float(target.x, target.y - 56, "Miss", "#b7ad9c");
+      sfxMiss();
+    } else {
+      const raw = d.atk * (1.3 + 0.28 * lv) - MONSTERS[target.kind].def * 0.4;
+      hurtMonster(target, Math.max(1, Math.round(raw)), "#f6f0e4");
+      sfxHit();
+    }
+  } else if (id === "spark" && target) {
+    p.dir = face(target.x - p.x, target.y - p.y);
+    for (let bolt = 0; bolt < lv && target.alive; bolt++) {
+      const raw = d.matk * (0.85 + Math.random() * 0.2) - MONSTERS[target.kind].mdef * 0.35;
+      hurtMonster(target, Math.max(1, Math.round(raw)), "#e07a4a");
+    }
+    sfxHit();
+  } else if (id === "twin" && target) {
+    p.dir = face(target.x - p.x, target.y - p.y);
+    const hit = Math.max(1, Math.round(d.atk * (0.9 + 0.24 * lv) - MONSTERS[target.kind].def * 0.28));
+    hurtMonster(target, hit, "#f6f0e4");
+    if (target.alive) hurtMonster(target, hit, "#f6f0e4");
+    sfxHit();
+  } else if (id === "ringCut") {
+    const map = getMap(world.mapId);
+    const radius = 72 + lv * 6;
+    let hits = 0;
+    for (const m of world.monsters) {
+      if (!m.alive) continue;
+      if (dist(p.x, p.y, m.x, m.y) > radius) continue;
+      const raw = d.atk * (1.15 + 0.22 * lv) - MONSTERS[m.kind].def * 0.35;
+      hurtMonster(m, Math.max(1, Math.round(raw)), "#e07a4a");
+      const dx = m.x - p.x;
+      const dy = m.y - p.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const push = 26 + lv * 5;
+      const nx = m.x + (dx / len) * push;
+      const ny = m.y + (dy / len) * push;
+      if (!isBlocked(map, nx, m.y)) m.x = nx;
+      if (!isBlocked(map, m.x, ny)) m.y = ny;
+      hits++;
+    }
+    if (hits === 0) {
+      p.sp += cost;
+      float(p.x, p.y - 40, "No one there", "#b7ad9c");
+    } else {
+      sfxHit();
+      world.shake = Math.min(6, world.shake + 2);
+    }
+  } else if (id === "ember") {
+    const origin = target ?? p;
+    const radius = 84 + lv * 8;
+    let hits = 0;
+    for (const m of world.monsters) {
+      if (!m.alive) continue;
+      if (dist(origin.x, origin.y, m.x, m.y) <= radius) {
+        const raw = d.matk * (1.35 + 0.32 * lv) - MONSTERS[m.kind].mdef * 0.35;
+        hurtMonster(m, Math.max(1, Math.round(raw)), "#e07a4a");
+        hits++;
+      }
+    }
+    if (hits === 0) {
+      p.sp += cost;
+      float(p.x, p.y - 40, "No one there", "#b7ad9c");
+    } else sfxHit();
+  }
+}
+
+function healSelf(amount: number) {
+  const p = world.player;
+  if (!p) return;
+  const d = derive(p);
+  const before = p.hp;
+  p.hp = Math.min(d.maxHp, p.hp + amount);
+  float(p.x, p.y - 66, `+${p.hp - before}`, "#7dba6a");
+  sfxHeal();
+}
+
+function addBuff(stat: "atk" | "def" | "flee" | "hit", amount: number, seconds: number) {
+  const p = world.player;
+  if (!p) return;
+  p.buffs = p.buffs.filter((b) => b.stat !== stat);
+  p.buffs.push({ stat, amount, until: world.time + seconds });
+  float(p.x, p.y - 60, stat.toUpperCase(), "#e4b15a");
+}
+
+function nearestMonster(radius: number) {
+  const p = world.player;
+  if (!p) return null;
+  let best: Monster | null = null;
+  let bestD = radius;
+  for (const m of world.monsters) {
+    if (!m.alive) continue;
+    const dd = dist(p.x, p.y, m.x, m.y);
+    if (dd < bestD) {
+      best = m;
+      bestD = dd;
+    }
+  }
+  return best;
+}
+
+export function pickAt(wx: number, wy: number) {
+  const map = getMap(world.mapId);
+  let best = "";
+  let bestD = 42;
+  for (const n of map.npcs) {
+    const dd = dist(wx, wy, n.x, n.y - 36);
+    if (dd < bestD) {
+      best = `npc:${n.id}`;
+      bestD = 46;
+    }
+  }
+  for (const m of world.monsters) {
+    if (!m.alive) continue;
+    const dd = dist(wx, wy, m.x, m.y - 30);
+    if (dd < 40 && dd < bestD + 8) {
+      best = `mon:${m.id}`;
+      bestD = dd;
+    }
+  }
+  return best;
+}
+
+export function pointerDown(wx: number, wy: number) {
+  const p = world.player;
+  if (!p || p.downFor > 0) return;
+  p.sit = false;
+  const hit = pickAt(wx, wy);
+  if (hit.startsWith("npc:")) {
+    const id = hit.slice(4);
+    const npc = getMap(world.mapId).npcs.find((n) => n.id === id);
+    world.targetId = null;
+    world.pendingTalk = id;
+    world.path = pathTo(npc ? npc.x : wx, npc ? npc.y : wy);
+    return;
+  }
+  if (hit.startsWith("mon:")) {
+    world.pendingTalk = null;
+    world.targetId = hit.slice(4);
+    world.path = [];
+    return;
+  }
+  world.targetId = null;
+  world.pendingTalk = null;
+  world.path = pathTo(wx, wy);
+}
+
+function hurtPlayer(amount: number) {
+  const p = world.player;
+  if (!p || p.invuln > 0 || p.downFor > 0 || p.feign > 0) return;
+  const dmg = Math.max(1, Math.round(amount));
+  p.hp -= dmg;
+  p.flash = 0.16;
+  p.invuln = 0.35;
+  float(p.x, p.y - 70, String(dmg), "#d4534a");
+  world.shake = Math.min(6, world.shake + 2);
+  sfxHit();
+  if (p.hp <= 0) {
+    p.hp = 0;
+    p.downFor = 1.5;
+    p.sit = false;
+    p.feign = 0;
+    world.targetId = null;
+    world.path = [];
+    sfxDown();
+  }
+}
+
+function respawn() {
+  const p = world.player;
+  if (!p) return;
+  const map = getMap("ambercross");
+  if (p.job !== "novice") p.baseExp = Math.floor(p.baseExp * 0.9);
+  p.downFor = 0;
+  p.feign = 0;
+  p.invuln = 1.6;
+  const d = derive(p);
+  p.hp = d.maxHp;
+  p.sp = Math.floor(d.maxSp * 0.5);
+  enterMap("ambercross", map.start.x, map.start.y);
+  sfxPortal();
+}
+
+function creep(m: Monster, tx: number, ty: number, distPx: number) {
+  const map = getMap(world.mapId);
+  const dx = tx - m.x;
+  const dy = ty - m.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const vx = (dx / len) * distPx;
+  const vy = (dy / len) * distPx;
+  const ox = m.x;
+  const oy = m.y;
+  if (!isBlocked(map, m.x + vx, m.y)) m.x += vx;
+  if (!isBlocked(map, m.x, m.y + vy)) m.y += vy;
+  if (Math.hypot(m.x - ox, m.y - oy) < distPx * 0.3) {
+    if (!isBlocked(map, ox - vy, oy)) m.x = ox - vy;
+    else if (!isBlocked(map, ox + vy, oy)) m.x = ox + vy;
+    if (!isBlocked(map, m.x, oy + vx)) m.y = oy + vx;
+    else if (!isBlocked(map, m.x, oy - vx)) m.y = oy - vx;
+  }
+  const moved = Math.hypot(m.x - ox, m.y - oy);
+  if (moved > 0.4) m.dir = faceHold(m.x - ox, m.y - oy, m.dir);
+  return moved;
+}
+
+function separateMonsters() {
+  const map = getMap(world.mapId);
+  const list = world.monsters;
+  for (let i = 0; i < list.length; i++) {
+    const a = list[i]!;
+    if (!a.alive) continue;
+    for (let j = i + 1; j < list.length; j++) {
+      const b = list[j]!;
+      if (!b.alive) continue;
+      let dx = b.x - a.x;
+      let dy = b.y - a.y;
+      let d = Math.hypot(dx, dy);
+      if (d < 0.01) {
+        dx = 1;
+        dy = 0;
+        d = 1;
+      }
+      if (d >= 26) continue;
+      const push = (26 - d) * 0.5;
+      const ox = (dx / d) * push;
+      const oy = (dy / d) * push;
+      if (!isBlocked(map, a.x - ox, a.y)) a.x -= ox;
+      if (!isBlocked(map, a.x, a.y - oy)) a.y -= oy;
+      if (!isBlocked(map, b.x + ox, b.y)) b.x += ox;
+      if (!isBlocked(map, b.x, b.y + oy)) b.y += oy;
+    }
+  }
+}
+
+function updateMonsters(dt: number) {
+  const p = world.player;
+  if (!p) return;
+  const hidden = p.downFor > 0 || p.feign > 0;
+  for (const m of world.monsters) {
+    m.hurt = Math.max(0, m.hurt - dt);
+    m.cd = Math.max(0, m.cd - dt);
+    m.moving = false;
+    if (!m.alive) {
+      m.deadUntil -= dt;
+      if (m.deadUntil <= 0) {
+        m.alive = true;
+        m.hp = m.maxHp;
+        m.x = m.homeX;
+        m.y = m.homeY;
+        m.aggro = false;
+        m.wanderX = m.homeX;
+        m.wanderY = m.homeY;
+        m.pause = 0.4 + Math.random();
+      }
+      continue;
+    }
+    const st = MONSTERS[m.kind];
+    const dd = dist(m.x, m.y, p.x, p.y);
+    const home = dist(m.x, m.y, m.homeX, m.homeY);
+    if (hidden) m.aggro = false;
+    if (home > 320) m.aggro = false;
+    if (!hidden && !m.aggro && st.behavior === "aggressive" && dd < st.aggro) m.aggro = true;
+
+    if (!hidden && m.aggro && st.behavior !== "skittish" && dd < 34 && p.downFor <= 0) {
+      m.dir = face(p.x - m.x, p.y - m.y);
+      m.moving = false;
+      m.anim += dt * 5;
+      if (m.cd <= 0) {
+        m.cd = 1.15;
+        const d = derive(p);
+        const raw = st.atk - d.def * 0.55;
+        const chance = Math.max(0.3, Math.min(0.95, (50 + st.level * 4) / (50 + st.level * 4 + d.flee)));
+        if (Math.random() > chance) float(p.x, p.y - 48, "Miss", "#b7ad9c");
+        else hurtPlayer(raw);
+      }
+      continue;
+    }
+
+    let tx = m.wanderX;
+    let ty = m.wanderY;
+    let speed = st.speed * 0.5;
+    if (!hidden && m.aggro && st.behavior !== "skittish") {
+      tx = p.x;
+      ty = p.y;
+      speed = st.speed;
+    } else if (!hidden && st.behavior === "skittish" && dd < st.aggro + 24) {
+      const dx = m.x - p.x;
+      const dy = m.y - p.y;
+      const len = Math.hypot(dx, dy) || 1;
+      tx = m.x + (dx / len) * 96;
+      ty = m.y + (dy / len) * 96;
+      const hx = tx - m.homeX;
+      const hy = ty - m.homeY;
+      const hd = Math.hypot(hx, hy);
+      if (hd > 150) {
+        tx = m.homeX + (hx / hd) * 150;
+        ty = m.homeY + (hy / hd) * 150;
+      }
+      speed = st.speed * 1.28;
+    } else {
+      m.aggro = false;
+      const at = dist(m.x, m.y, m.wanderX, m.wanderY);
+      if (at < 10) {
+        m.pause -= dt;
+        m.anim += dt * 1.6;
+        if (m.pause > 0) continue;
+        const ang = Math.random() * Math.PI * 2;
+        const rad = 22 + Math.random() * (m.kind === "thorn" ? 36 : 78);
+        m.wanderX = m.homeX + Math.cos(ang) * rad;
+        m.wanderY = m.homeY + Math.sin(ang) * rad;
+        m.pause = 0.8 + Math.random() * 1.8;
+        continue;
+      }
+      tx = m.wanderX;
+      ty = m.wanderY;
+      speed = st.speed * (st.behavior === "aggressive" ? 0.42 : 0.55);
+    }
+    const moved = creep(m, tx, ty, speed * dt);
+    m.moving = moved > 0.4;
+    if (m.moving) m.anim += dt * (m.kind === "hare" ? 7 : 4);
+    else m.anim += dt * 1.4;
+  }
+  separateMonsters();
+}
+
+function pickups() {
+  const p = world.player;
+  if (!p) return;
+  for (const drop of [...world.drops]) {
+    if (drop.mapId !== world.mapId) continue;
+    if (dist(p.x, p.y, drop.x, drop.y) < 28) {
+      const it = ITEMS[drop.itemId];
+      if (!it) continue;
+      if (it.stack) {
+        const have = p.inv.find((s) => s.itemId === drop.itemId);
+        if (have) have.qty += drop.qty;
+        else if (p.inv.length < 28) p.inv.push({ itemId: drop.itemId, qty: drop.qty });
+        else continue;
+      } else if (p.inv.length < 28) p.inv.push({ itemId: drop.itemId, qty: drop.qty });
+      else continue;
+      world.drops = world.drops.filter((d) => d.id !== drop.id);
+      float(drop.x, drop.y - 20, it.name, "#f6f0e4");
+      sfxPickup();
+    }
+  }
+}
+
+function decayWorld(dt: number) {
+  for (const f of world.floats) {
+    f.y -= 26 * dt;
+    f.life -= dt;
+  }
+  world.floats = world.floats.filter((f) => f.life > 0);
+  for (const part of world.particles) {
+    part.x += part.vx * dt;
+    part.y += part.vy * dt;
+    part.life -= dt;
+  }
+  world.particles = world.particles.filter((part) => part.life > 0);
+}
+
+export function step(dt: number) {
+  const p = world.player;
+  if (!p) return;
+  if (p.downFor > 0) {
+    p.downFor -= dt;
+    updateMonsters(dt);
+    decayWorld(dt);
+    if (p.downFor <= 0) respawn();
+    return;
+  }
+  p.attackCd = Math.max(0, p.attackCd - dt);
+  p.itemCd = Math.max(0, p.itemCd - dt);
+  p.flash = Math.max(0, p.flash - dt);
+  p.invuln = Math.max(0, p.invuln - dt);
+  p.swing = Math.max(0, (p.swing ?? 0) - dt);
+  const wasFeign = p.feign > 0;
+  p.feign = Math.max(0, (p.feign ?? 0) - dt);
+  if (wasFeign && p.feign <= 0) p.sit = false;
+  p.buffs = p.buffs.filter((b) => b.until > world.time);
+  world.portalLock = Math.max(0, world.portalLock - dt);
+  world.repath = Math.max(0, world.repath - dt);
+  const d = derive(p);
+  if (p.hp > d.maxHp) p.hp = d.maxHp;
+  if (p.sp > d.maxSp) p.sp = d.maxSp;
+  const braced = p.buffs.some((b) => b.stat === "def");
+  p.hp = Math.min(d.maxHp, p.hp + dt * (braced ? 1.6 : 0.35));
+  p.sp = Math.min(d.maxSp, p.sp + dt * 0.55);
+  if (p.sit || p.feign > 0) {
+    p.hp = Math.min(d.maxHp, p.hp + dt * 4);
+    p.sp = Math.min(d.maxSp, p.sp + dt * 3);
+  }
+
+  const keys = held();
+  let mx = 0;
+  let my = 0;
+  if (keys.has("KeyA") || keys.has("ArrowLeft")) mx -= 1;
+  if (keys.has("KeyD") || keys.has("ArrowRight")) mx += 1;
+  if (keys.has("KeyW") || keys.has("ArrowUp")) my -= 1;
+  if (keys.has("KeyS") || keys.has("ArrowDown")) my += 1;
+  mx += world.touch.x;
+  my += world.touch.y;
+  const manual = Math.abs(mx) + Math.abs(my) > 0.12;
+  let movedPx = 0;
+  if (p.feign > 0 && !manual) {
+    p.speedInstant = 0;
+    p.sit = true;
+  } else if (manual) {
+    p.sit = false;
+    p.feign = 0;
+    world.path = [];
+    world.pendingTalk = null;
+    const mag = Math.min(1, Math.hypot(mx, my));
+    movedPx = travel(mx, my, d.speed * dt * mag);
+  } else if (!p.sit && world.path.length) {
+    movedPx = followPath(d.speed * dt);
+  }
+  p.speedInstant = dt > 0 ? movedPx / dt : 0;
+  noteSteps(movedPx);
+
+  const target = monsterById(world.targetId);
+  if (p.feign > 0) {
+    world.targetId = null;
+  } else if (target && !manual && !p.sit) {
+    const dd = dist(p.x, p.y, target.x, target.y);
+    if (dd <= d.range) {
+      world.path = [];
+      p.dir = face(target.x - p.x, target.y - p.y);
+      basicAttack();
+    } else if (world.repath <= 0 && (world.path.length === 0 || dist(target.x, target.y, world.chaseX, world.chaseY) > 40)) {
+      const away = Math.max(26, d.range - 6);
+      const dx = p.x - target.x;
+      const dy = p.y - target.y;
+      const len = Math.hypot(dx, dy) || 1;
+      world.chaseX = target.x;
+      world.chaseY = target.y;
+      world.path = pathTo(target.x + (dx / len) * away, target.y + (dy / len) * away);
+    }
+  } else if (!target) world.targetId = null;
+
+  if (world.pendingTalk && !manual) {
+    const npc = getMap(world.mapId).npcs.find((n) => n.id === world.pendingTalk);
+    if (npc && dist(p.x, p.y, npc.x, npc.y) < 64) {
+      world.path = [];
+      world.pendingTalk = null;
+      openNpc(npc.id);
+    }
+  }
+
+  if (world.touch.attack && !p.sit) {
+    if (!monsterById(world.targetId)) {
+      const near = nearestMonster(220);
+      if (near) world.targetId = near.id;
+    }
+    basicAttack();
+  }
+
+  if (world.portalLock <= 0) {
+    for (const portal of getMap(world.mapId).portals) {
+      if (p.x >= portal.x && p.x <= portal.x + portal.w && p.y >= portal.y && p.y <= portal.y + portal.h) {
+        enterMap(portal.to, portal.tx, portal.ty);
+        sfxPortal();
+        break;
+      }
+    }
+  }
+
+  pickups();
+  updateMonsters(dt);
+  decayWorld(dt);
+
+  if (keys.has("Space")) basicAttack();
+}
+
+export function installProbe() {
+  window.__controlsTest = {
+    getX: () => world.player?.x ?? 0,
+    getY: () => world.player?.y ?? 0,
+    getYaw: () => world.player?.dir ?? 0,
+    getSpeed: () => world.player?.speedInstant ?? 0,
+    setKeys: (codes: string[]) => {
+      world.qaKeys = codes.length ? new Set(codes) : null;
+    },
+  };
+}
+
+declare global {
+  interface Window {
+    __controlsTest?: {
+      getYaw: () => number;
+      getSpeed: () => number;
+      getX: () => number;
+      getY: () => number;
+      setKeys?: (codes: string[]) => void;
+    };
+  }
+}

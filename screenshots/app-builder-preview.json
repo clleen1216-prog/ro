@@ -1,0 +1,36 @@
+{
+  "url": "http://127.0.0.1:8080/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "Ambercross",
+      "hasCanvas": true,
+      "bodyTextLen": 248,
+      "bodyTextHash": "8884f79cd60772349da365912e3de5eb8bfc8e15be385e394048a7eeabed3834",
+      "bodyTextPrefix": "CAPITAL PLAZA Ambercross A small classic online RPG. Start as a ",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "Ambercross",
+      "hasCanvas": true,
+      "bodyTextLen": 248,
+      "bodyTextHash": "8884f79cd60772349da365912e3de5eb8bfc8e15be385e394048a7eeabed3834",
+      "bodyTextPrefix": "CAPITAL PLAZA Ambercross A small classic online RPG. Start as a ",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/app-builder-preview-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/app-builder-preview.json"
+}

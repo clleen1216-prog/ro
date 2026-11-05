@@ -1,0 +1,95 @@
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,560;9..144,680&family=Outfit:wght@400;500;600&display=swap");
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #141a27;
+  --color-surface: #1c2433;
+  --color-surface-2: #273246;
+  --color-fg: #f6f0e4;
+  --color-muted: #b7ad9c;
+  --color-gold: #e4b15a;
+  --color-gold-dim: #8c6a32;
+  --color-line: #3c4a63;
+  --color-hp: #d4534a;
+  --color-hp-deep: #6e2a26;
+  --color-sp: #3d8fd1;
+  --color-sp-deep: #1a4568;
+  --color-exp: #e0a24a;
+  --color-job: #7dba6a;
+  --color-parchment: #f3e6c8;
+  --color-parchment-edge: #c4b089;
+  --color-ink: #2a2118;
+  --font-display: "Fraunces", Georgia, serif;
+  --font-sans: "Outfit", system-ui, sans-serif;
+  --radius-panel: 0.45rem;
+}
+
+@layer base {
+  html,
+  body {
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    background: var(--color-bg);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+
+  #root,
+  body > div {
+    height: 100%;
+  }
+}
+
+@layer components {
+  .panel {
+    border: 1px solid var(--color-line);
+    background: color-mix(in srgb, var(--color-surface) 94%, black);
+    color: var(--color-fg);
+    border-radius: var(--radius-panel);
+    box-shadow: 0 16px 40px rgb(0 0 0 / 0.35);
+  }
+
+  .parchment {
+    background: var(--color-parchment);
+    color: var(--color-ink);
+    border: 1px solid var(--color-parchment-edge);
+    border-radius: var(--radius-panel);
+    box-shadow: 0 18px 40px rgb(0 0 0 / 0.4);
+  }
+
+  .bar {
+    height: 0.7rem;
+    overflow: hidden;
+    border-radius: 999px;
+    background: rgb(0 0 0 / 0.35);
+  }
+
+  .touch-only {
+    display: none;
+  }
+}
+
+@media (pointer: coarse) {
+  .touch-only {
+    display: grid;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel,
+  .parchment,
+  button {
+    transition: none !important;
+  }
+}

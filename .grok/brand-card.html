@@ -1,0 +1,393 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="fonts/fonts.css" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #1a2233;
+      }
+      canvas {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="c"></canvas>
+    <script>
+      const mode = location.hash === "#banner" ? "banner" : "og";
+      const W = 1200;
+      const H = mode === "banner" ? 264 : 630;
+      const canvas = document.getElementById("c");
+      canvas.width = W;
+      canvas.height = H;
+      const ctx = canvas.getContext("2d");
+
+      const NAVY = "#1a2233";
+      const GOLD = "#e4b15a";
+      const CREAM = "#f3e6c8";
+      const RED = "#d4534a";
+      const BLUE = "#3d8fd1";
+
+      function load(src) {
+        return new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => resolve(img);
+          img.onerror = () => reject(new Error(src));
+          img.src = src;
+        });
+      }
+
+      function roundRect(x, y, w, h, r) {
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.arcTo(x + w, y, x + w, y + h, r);
+        ctx.arcTo(x + w, y + h, x, y + h, r);
+        ctx.arcTo(x, y + h, x, y, r);
+        ctx.arcTo(x, y, x + w, y, r);
+        ctx.closePath();
+      }
+
+      function shadow(x, y, rx) {
+        ctx.save();
+        ctx.fillStyle = "rgba(26,34,51,0.28)";
+        ctx.beginPath();
+        ctx.ellipse(x, y, rx, rx * 0.36, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      function tiles(img, x, y, w, h, size) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(x, y, w, h);
+        ctx.clip();
+        ctx.imageSmoothingEnabled = false;
+        const x0 = Math.floor(x / size) * size;
+        const y0 = Math.floor(y / size) * size;
+        for (let yy = y0; yy < y + h; yy += size) {
+          for (let xx = x0; xx < x + w; xx += size) {
+            ctx.drawImage(img, xx, yy, size + 0.5, size + 0.5);
+          }
+        }
+        ctx.restore();
+      }
+
+      function sprite(img, sx, sy, sw, sh, x, y, dw, dh) {
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(img, sx, sy, sw, sh, x, y, dw, dh);
+      }
+
+      function tree(x, y, s) {
+        shadow(x, y, 16 * s);
+        ctx.fillStyle = "#6b442c";
+        ctx.fillRect(x - 4 * s, y - 26 * s, 8 * s, 26 * s);
+        ctx.fillStyle = "#245536";
+        ctx.beginPath();
+        ctx.arc(x, y - 40 * s, 22 * s, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#2f7a45";
+        ctx.beginPath();
+        ctx.arc(x - 10 * s, y - 46 * s, 14 * s, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#67a85a";
+        ctx.beginPath();
+        ctx.arc(x + 8 * s, y - 50 * s, 11 * s, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      function flower(x, y, hue) {
+        ctx.fillStyle = "#2f6b3a";
+        ctx.fillRect(x - 1.5, y - 14, 3, 14);
+        ctx.fillStyle = hue;
+        ctx.beginPath();
+        ctx.arc(x, y - 16, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = GOLD;
+        ctx.beginPath();
+        ctx.arc(x, y - 16, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      function lamp(x, y, s) {
+        ctx.fillStyle = "#5c3a2a";
+        ctx.fillRect(x - 3 * s, y - 46 * s, 6 * s, 46 * s);
+        ctx.fillStyle = "rgba(228,177,90,0.35)";
+        ctx.beginPath();
+        ctx.arc(x, y - 50 * s, 14 * s, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = GOLD;
+        ctx.beginPath();
+        ctx.arc(x, y - 50 * s, 6 * s, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      function sanctum(x, y, w, h) {
+        shadow(x, y, w * 0.38);
+        const left = x - w / 2;
+        const top = y - h;
+        ctx.fillStyle = RED;
+        ctx.beginPath();
+        ctx.moveTo(left - 10, top + h * 0.42);
+        ctx.lineTo(x, top);
+        ctx.lineTo(left + w + 10, top + h * 0.42);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = CREAM;
+        ctx.fillRect(left, top + h * 0.38, w, h * 0.62);
+        ctx.fillStyle = "#c4b089";
+        ctx.fillRect(left, top + h * 0.38, w, 6);
+        ctx.fillStyle = RED;
+        ctx.beginPath();
+        ctx.arc(x, top + h * 0.16, Math.max(8, w * 0.045), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#f2e2a8";
+        ctx.beginPath();
+        ctx.arc(x, top + h * 0.55, w * 0.09, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = GOLD;
+        ctx.beginPath();
+        ctx.arc(x, top + h * 0.55, w * 0.035, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "#4a2e22";
+        roundRect(x - w * 0.09, y - h * 0.3, w * 0.18, h * 0.3, 8);
+        ctx.fill();
+      }
+
+      function shop(x, y, w, h, awning) {
+        shadow(x, y, w * 0.38);
+        const left = x - w / 2;
+        const top = y - h;
+        ctx.fillStyle = CREAM;
+        ctx.fillRect(left, top + h * 0.34, w, h * 0.66);
+        ctx.fillStyle = "#5c3a2a";
+        ctx.fillRect(left + w * 0.16, top + h * 0.34, 7, h * 0.66);
+        ctx.fillRect(left + w * 0.74, top + h * 0.34, 7, h * 0.66);
+        ctx.fillStyle = RED;
+        ctx.beginPath();
+        ctx.moveTo(left - 8, top + h * 0.4);
+        ctx.lineTo(x, top);
+        ctx.lineTo(left + w + 8, top + h * 0.4);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = awning;
+        ctx.fillRect(left + 8, top + h * 0.46, w - 16, 18);
+        ctx.fillStyle = "#9fd0ea";
+        ctx.fillRect(left + w * 0.18, top + h * 0.64, w * 0.22, h * 0.14);
+        ctx.fillStyle = "#4a2e22";
+        ctx.fillRect(x - 12, y - h * 0.26, 24, h * 0.26);
+      }
+
+      function arch(x, y, w, h) {
+        const left = x - w / 2;
+        const top = y - h;
+        const tw = w * 0.2;
+        ctx.fillStyle = CREAM;
+        ctx.fillRect(left, top + 18, tw, h - 18);
+        ctx.fillRect(left + w - tw, top + 18, tw, h - 18);
+        ctx.fillStyle = RED;
+        ctx.fillRect(left - 6, top + 8, tw + 12, 16);
+        ctx.fillRect(left + w - tw - 6, top + 8, tw + 12, 16);
+        ctx.fillStyle = "#e7d3a8";
+        ctx.beginPath();
+        ctx.moveTo(left + tw, top + h * 0.48);
+        ctx.quadraticCurveTo(x, top + 18, left + w - tw, top + h * 0.48);
+        ctx.lineTo(left + w - tw, top + h * 0.66);
+        ctx.quadraticCurveTo(x, top + h * 0.32, left + tw, top + h * 0.66);
+        ctx.fill();
+      }
+
+      function sky(h) {
+        const g = ctx.createLinearGradient(0, 0, 0, h);
+        g.addColorStop(0, "#9ed4f2");
+        g.addColorStop(0.45, BLUE);
+        g.addColorStop(1, "#2f6ea8");
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, W, h);
+        ctx.fillStyle = "rgba(243,230,200,0.55)";
+        const clouds = [
+          [180, 70, 90, 28],
+          [420, 48, 120, 32],
+          [980, 64, 140, 34],
+          [760, 36, 70, 22],
+        ];
+        for (const [x, y, rw, rh] of clouds) {
+          ctx.beginPath();
+          ctx.ellipse(x, y, rw, rh, 0, 0, Math.PI * 2);
+          ctx.ellipse(x + rw * 0.45, y + 6, rw * 0.7, rh * 0.8, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      function sun(x, y, r) {
+        const glow = ctx.createRadialGradient(x, y, r * 0.2, x, y, r * 3.2);
+        glow.addColorStop(0, "rgba(228,177,90,0.85)");
+        glow.addColorStop(1, "rgba(228,177,90,0)");
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(x, y, r * 3.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = GOLD;
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = CREAM;
+        ctx.beginPath();
+        ctx.arc(x - r * 0.2, y - r * 0.2, r * 0.45, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      function lockup(text, tag, cx, baseline, size, align) {
+        ctx.save();
+        ctx.textAlign = align;
+        ctx.textBaseline = "alphabetic";
+        ctx.lineJoin = "round";
+        ctx.miterLimit = 2;
+        ctx.letterSpacing = Math.round(size * 0.04) + "px";
+        ctx.font = `680 ${size}px Fraunces, "Liberation Serif", serif`;
+        ctx.lineWidth = Math.max(8, Math.round(size * 0.11));
+        ctx.strokeStyle = NAVY;
+        ctx.strokeText(text, cx, baseline);
+        ctx.fillStyle = GOLD;
+        ctx.fillText(text, cx, baseline);
+        const titleW = ctx.measureText(text).width;
+        ctx.letterSpacing = "0.18em";
+        const tagSize = Math.round(size * 0.4);
+        ctx.font = `600 ${tagSize}px Outfit, "Liberation Sans", sans-serif`;
+        ctx.lineWidth = Math.max(4, Math.round(tagSize * 0.18));
+        const tagY = baseline + Math.round(size * 0.5);
+        ctx.strokeStyle = NAVY;
+        ctx.strokeText(tag, cx, tagY);
+        ctx.fillStyle = CREAM;
+        ctx.fillText(tag, cx, tagY);
+        const tagW = ctx.measureText(tag).width;
+        const metrics = ctx.measureText(text);
+        ctx.restore();
+        return {
+          titleW,
+          tagW,
+          tagY,
+          size,
+          tagSize,
+          ascent: size * 0.78,
+          baseline,
+          cx,
+          align,
+        };
+      }
+
+      async function main() {
+        const [cobble, grass, dirt, fountain, hero, dew] = await Promise.all([
+          load("../public/game/cobble.png"),
+          load("../public/game/grass.png"),
+          load("../public/game/dirt.png"),
+          load("../public/game/fountain.png"),
+          load("../public/game/hero.png"),
+          load("../public/game/dew.png"),
+        ]);
+        await document.fonts.ready;
+
+        if (mode === "og") {
+          sky(H);
+          sun(1040, 86, 36);
+          tiles(grass, 0, 300, W, H - 300, 72);
+          // cobbled square
+          ctx.save();
+          roundRect(90, 300, 1020, 250, 28);
+          ctx.clip();
+          tiles(cobble, 90, 300, 1020, 250, 72);
+          ctx.restore();
+          // south path into the meadow
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(500, 500, 200, 130);
+          ctx.clip();
+          tiles(dirt, 500, 500, 200, 130, 64);
+          ctx.restore();
+
+          for (let i = 0; i < 9; i++) tree(46 + (i % 2) * 8, 360 + i * 28, 0.72);
+          for (let i = 0; i < 9; i++) tree(1154 - (i % 2) * 8, 360 + i * 28, 0.72);
+
+          sanctum(600, 468, 340, 250);
+          shop(210, 500, 200, 150, "#2f8f6a");
+          shop(990, 500, 200, 150, "#3d8fd1");
+          arch(600, 618, 250, 130);
+
+          const flowers = [
+            [150, 575, RED],
+            [250, 590, GOLD],
+            [930, 580, RED],
+            [1060, 568, "#f2d7a2"],
+            [430, 600, RED],
+            [780, 605, GOLD],
+            [360, 560, "#f2d7a2"],
+            [840, 555, RED],
+          ];
+          for (const [x, y, hue] of flowers) flower(x, y, hue);
+          lamp(360, 500, 1.15);
+          lamp(840, 500, 1.15);
+
+          shadow(600, 548, 90);
+          sprite(fountain, 0, 0, 256, 256, 450, 330, 300, 250);
+          shadow(390, 575, 28);
+          sprite(hero, 0, 0, 96, 96, 268, 430, 150, 150);
+          shadow(860, 568, 26);
+          sprite(dew, 0, 0, 128, 128, 800, 438, 140, 140);
+
+          // meadow lip
+          for (const [x, y, hue] of [
+            [80, 620, RED],
+            [1120, 615, GOLD],
+            [200, 618, GOLD],
+            [1000, 622, RED],
+          ]) flower(x, y, hue);
+
+          lockup("AMBERCROSS", "Capital plaza", 600, 168, 92, "center");
+        } else {
+          sky(H);
+          sun(1088, 46, 22);
+          tiles(grass, 0, 150, W, H - 150, 56);
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(0, 156, W, 108);
+          ctx.clip();
+          tiles(cobble, 0, 156, W, 108, 56);
+          ctx.restore();
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(860, 200, 90, 64);
+          ctx.clip();
+          tiles(dirt, 860, 200, 90, 64, 48);
+          ctx.restore();
+
+          tree(40, 214, 0.55);
+          tree(118, 220, 0.48);
+          sanctum(760, 228, 168, 132);
+          shop(1048, 226, 130, 100, "#2f8f6a");
+          arch(900, 258, 120, 70);
+          lamp(660, 224, 0.7);
+          flower(560, 236, RED);
+          flower(610, 242, GOLD);
+          flower(980, 240, RED);
+          flower(1120, 236, GOLD);
+
+          shadow(860, 232, 36);
+          sprite(fountain, 0, 0, 256, 256, 790, 128, 140, 116);
+          shadow(690, 236, 14);
+          sprite(hero, 0, 0, 96, 96, 648, 168, 72, 72);
+
+          lockup("AMBERCROSS", "Capital plaza", 64, 88, 54, "left");
+        }
+
+        document.body.dataset.ready = "1";
+      }
+
+      main().catch((err) => {
+        document.body.dataset.ready = "err";
+        document.body.dataset.msg = String(err);
+      });
+    </script>
+  </body>
+</html>
