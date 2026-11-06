@@ -10,6 +10,9 @@ import type {
   SkillId,
   WeaponKind,
 } from "@/game/types";
+import { MONSTER_DEFS, RO_ITEMS, SHOP_ARMOR, SHOP_TOOLS, SHOP_WEAPONS, type MonsterDef } from "@/game/rodata";
+
+export type { MonsterDef };
 
 export const TILE = 48;
 export const BASE_STAT = 5;
@@ -74,6 +77,10 @@ export type ItemDef = {
   tint: string;
   desc: string;
   price: number;
+  /** zeny paid when sold to a shop (defaults to 45% of price) */
+  sell?: number;
+  /** special use effect */
+  effect?: "fly" | "butterfly";
   stack?: boolean;
   heal?: number;
   spRestore?: number;
@@ -95,7 +102,7 @@ export type ItemDef = {
 
 const item = (partial: ItemDef): ItemDef => partial;
 
-export const ITEMS: Record<string, ItemDef> = {
+const BASE_ITEMS: Record<string, ItemDef> = {
   "worn-knife": item({
     id: "worn-knife",
     name: "Worn Knife",
@@ -574,7 +581,13 @@ export const ITEMS: Record<string, ItemDef> = {
   }),
 };
 
-export const SMITH_STOCK = [
+export const ITEMS: Record<string, ItemDef> = { ...BASE_ITEMS, ...RO_ITEMS };
+
+export function sellPrice(it: ItemDef) {
+  return Math.max(1, it.sell ?? Math.floor(it.price * 0.45));
+}
+
+const BASE_SMITH = [
   "worn-knife",
   "short-sword",
   "sun-blade",
@@ -586,7 +599,7 @@ export const SMITH_STOCK = [
   "buckler",
   "sun-shield",
 ];
-export const OUTFIT_STOCK = [
+const BASE_OUTFIT = [
   "cotton-shirt",
   "leather-vest",
   "plate-coat",
@@ -614,7 +627,9 @@ export const OUTFIT_STOCK = [
   "brooch-life",
   "lucky-charm",
 ];
-export const SUPPLY_STOCK = ["salve", "ether"];
+export const SMITH_STOCK = [...BASE_SMITH, ...SHOP_WEAPONS];
+export const OUTFIT_STOCK = [...BASE_OUTFIT, ...SHOP_ARMOR];
+export const SUPPLY_STOCK = ["salve", "ether", ...SHOP_TOOLS];
 
 export type SkillDef = {
   id: SkillId;
@@ -733,8 +748,17 @@ export const JOBS: Record<JobId, { name: string; blurb: string; skills: SkillId[
   },
 };
 
+export const MAX_BASE = 60;
+export const MAX_JOB = 50;
+
+/** EXP to the next base level (shaped like the classic RO table). */
 export function expNeed(level: number) {
-  return 12 * level + 10;
+  return Math.round(8 * Math.pow(level, 1.85) + 6);
+}
+
+/** EXP to the next job level. */
+export function jobExpNeed(level: number) {
+  return Math.round(6 * Math.pow(level, 1.7) + 4);
 }
 
 export function jobBonus(job: JobId): Partial<Record<"str" | "agi" | "vit" | "int" | "dex" | "luk", number>> {
@@ -774,22 +798,9 @@ export function itemStats(it: ItemDef) {
   return bits.join(" · ");
 }
 
-export const MONSTERS: Record<
-  MonsterKind,
-  {
-    name: string;
-    hp: number;
-    atk: number;
-    def: number;
-    mdef: number;
-    exp: number;
-    jexp: number;
-    level: number;
-    behavior: Behavior;
-    speed: number;
-    aggro: number;
-    draw: number;
-  }
+const BASE_MONSTERS: Record<
+  string,
+  Omit<MonsterDef, "zeny" | "tag" | "drops">
 > = {
   dew: {
     name: "Dewdrop",
@@ -849,46 +860,69 @@ export const MONSTERS: Record<
   },
 };
 
-export function rollLoot(kind: MonsterKind): { items: { id: string; qty: number }[]; marks: number; rare: boolean } {
+const LEGACY: Record<string, Pick<MonsterDef, "zeny" | "tag" | "drops">> = {
+  dew: {
+    zeny: [6, 15],
+    tag: "Water · Neutral 1",
+    drops: [{ id: "amber-jelly", rate: 75 }, { id: "salve", rate: 12 }, { id: "sun-cap", rate: 4.5 }],
+  },
+  hare: {
+    zeny: [10, 24],
+    tag: "Brute · Neutral 1",
+    drops: [{ id: "fluff", rate: 70 }, { id: "carrot", rate: 6 }, { id: "spectacles", rate: 4 }],
+  },
+  wasp: {
+    zeny: [14, 30],
+    tag: "Insect · Wind 1",
+    drops: [{ id: "wing", rate: 68 }, { id: "ether", rate: 14 }, { id: "clip-wind", rate: 4 }],
+  },
+  thorn: {
+    zeny: [18, 38],
+    tag: "Plant · Earth 1",
+    drops: [{ id: "heartwood", rate: 65 }, { id: "green-herb", rate: 8 }, { id: "laurel", rate: 5 }],
+  },
+};
+
+export const MONSTERS: Record<string, MonsterDef> = {
+  ...Object.fromEntries(Object.entries(BASE_MONSTERS).map(([k, v]) => [k, { ...v, ...LEGACY[k]! }])),
+  ...MONSTER_DEFS,
+};
+
+export type LootResult = { items: { id: string; qty: number }[]; marks: number; rareIds: string[] };
+
+export function rollLoot(kind: MonsterKind): LootResult {
+  const st = MONSTERS[kind];
   const items: { id: string; qty: number }[] = [];
-  let rare = false;
-  const r = Math.random();
-  if (kind === "dew") {
-    if (r < 0.75) items.push({ id: "amber-jelly", qty: 1 });
-    if (Math.random() < 0.12) items.push({ id: "salve", qty: 1 });
-    if (Math.random() < 0.045) {
-      items.push({ id: "sun-cap", qty: 1 });
-      rare = true;
+  const rareIds: string[] = [];
+  if (!st) return { items, marks: 0, rareIds };
+  for (const d of st.drops) {
+    if (Math.random() * 100 < d.rate) {
+      items.push({ id: d.id, qty: 1 });
+      if (d.rate <= 5 && ITEMS[d.id] && ITEMS[d.id]!.slot !== "use") rareIds.push(d.id);
     }
-    return { items, marks: 6 + Math.floor(Math.random() * 10), rare };
   }
-  if (kind === "hare") {
-    if (r < 0.7) items.push({ id: "fluff", qty: 1 });
-    if (Math.random() < 0.04) {
-      items.push({ id: "spectacles", qty: 1 });
-      rare = true;
-    }
-    return { items, marks: 10 + Math.floor(Math.random() * 14), rare };
-  }
-  if (kind === "wasp") {
-    if (r < 0.68) items.push({ id: "wing", qty: 1 });
-    if (Math.random() < 0.14) items.push({ id: "ether", qty: 1 });
-    if (Math.random() < 0.04) {
-      items.push({ id: "clip-wind", qty: 1 });
-      rare = true;
-    }
-    return { items, marks: 14 + Math.floor(Math.random() * 16), rare };
-  }
-  if (r < 0.65) items.push({ id: "heartwood", qty: 1 });
-  if (Math.random() < 0.05) {
-    items.push({ id: "laurel", qty: 1 });
-    rare = true;
-  }
-  return { items, marks: 18 + Math.floor(Math.random() * 20), rare };
+  const [lo, hi] = st.zeny;
+  return { items, marks: lo + Math.floor(Math.random() * (hi - lo + 1)), rareIds };
 }
 
 export type Prop = {
-  kind: "tree" | "fountain" | "sanctum" | "shop" | "shopb" | "stall" | "arch" | "lamp" | "flower" | "sign" | "rock";
+  kind:
+    | "tree"
+    | "fountain"
+    | "sanctum"
+    | "shop"
+    | "shopb"
+    | "stall"
+    | "arch"
+    | "lamp"
+    | "flower"
+    | "sign"
+    | "rock"
+    | "cactus"
+    | "tomb"
+    | "pillar"
+    | "bones"
+    | "torch";
   x: number;
   y: number;
   w?: number;
@@ -939,6 +973,12 @@ export type MapDef = {
   pxH: number;
   portals: Portal[];
   spawns: { kind: MonsterKind; x: number; y: number }[];
+  /** suggested level range shown in the HUD */
+  levels?: string;
+  /** atmosphere overlay colour */
+  tint?: string;
+  /** darken the screen edges */
+  vignette?: number;
 };
 
 function rng(seed: number) {
@@ -986,7 +1026,7 @@ function buildCity(): MapDef {
   for (let y = 0; y < rows; y++) {
     for (let x = 0; x < cols; x++) {
       const edge = x === 0 || y === 0 || x === cols - 1 || y === rows - 1;
-      const gate = y >= rows - 1 && x >= 14 && x <= 17;
+      const gate = (y >= rows - 1 && x >= 14 && x <= 17) || ((x === 0 || x === cols - 1) && y >= 15 && y <= 16);
       if (edge && !gate) block[y * cols + x] = 1;
     }
   }
@@ -1016,7 +1056,7 @@ function buildCity(): MapDef {
   for (let y = 0; y < rows; y++) {
     for (let x = 0; x < cols; x++) {
       const edge = x === 0 || y === 0 || x === cols - 1 || y === rows - 1;
-      const gate = y >= rows - 1 && x >= 14 && x <= 17;
+      const gate = (y >= rows - 1 && x >= 14 && x <= 17) || ((x === 0 || x === cols - 1) && y >= 15 && y <= 16);
       if (edge && !gate && (x + y) % 2 === 0) {
         props.push({ kind: "tree", x: (x + 0.5) * T, y: (y + 0.85) * T });
       } else if (!block[y * cols + x] && ground[y * cols + x] === 0 && rand() < 0.05) {
@@ -1134,6 +1174,19 @@ function buildCity(): MapDef {
     },
   ];
 
+  paint(ground, cols, rows, 0, 15, 4, 2, 1);
+  paint(ground, cols, rows, cols - 4, 15, 4, 2, 1);
+  // keep the side-gate lanes open: no blocking tiles, no trees on the cobbles
+  for (const lx of [0, cols - 5]) {
+    paint(block, cols, rows, lx, 15, 5, 2, 0);
+    for (let i = props.length - 1; i >= 0; i--) {
+      const pr = props[i]!;
+      if ((pr.kind === "tree" || pr.kind === "flower") && pr.x >= lx * T && pr.x < (lx + 5) * T && pr.y >= 14.8 * T && pr.y < 18.2 * T) props.splice(i, 1);
+    }
+  }
+  props.push({ kind: "sign", x: 2.6 * T, y: 14.6 * T, label: "Sograt Dunes" });
+  props.push({ kind: "sign", x: (cols - 2.6) * T, y: 14.6 * T, label: "Poring Fields" });
+
   const start = { x: 16 * T, y: 17.6 * T };
   return {
     id: "ambercross",
@@ -1160,6 +1213,8 @@ function buildCity(): MapDef {
         tx: 16 * T,
         ty: 2.7 * T,
       },
+      { x: 0, y: 15 * T, w: 1.3 * T, h: 2 * T, to: "dunes", tx: 37.4 * T, ty: 15.6 * T },
+      { x: (cols - 1.3) * T, y: 15 * T, w: 1.3 * T, h: 2 * T, to: "poring", tx: 2.6 * T, ty: 15.6 * T },
     ],
     spawns: [],
   };
@@ -1180,7 +1235,7 @@ function buildField(backX: number, backY: number): MapDef {
   for (let y = 0; y < rows; y++) {
     for (let x = 0; x < cols; x++) {
       const edge = x === 0 || y === 0 || x === cols - 1 || y === rows - 1;
-      const gate = y === 0 && x >= 14 && x <= 17;
+      const gate = (y === 0 || y === rows - 1) && x >= 14 && x <= 17;
       if (edge && !gate) block[y * cols + x] = 1;
       if (ground[y * cols + x] === 3) block[y * cols + x] = 1;
     }
@@ -1189,6 +1244,8 @@ function buildField(backX: number, backY: number): MapDef {
   const props: Prop[] = [];
   props.push({ kind: "arch", x: 16 * T, y: 1.15 * T, w: 5.2 * T, h: 3 * T });
   props.push({ kind: "sign", x: 12.4 * T, y: 2.5 * T, label: "Ambercross" });
+  props.push({ kind: "arch", x: 16 * T, y: (rows - 0.1) * T, w: 5.2 * T, h: 3 * T });
+  props.push({ kind: "sign", x: 12.4 * T, y: (rows - 2.2) * T, label: "Willow Woods" });
   props.push({ kind: "rock", x: 21.3 * T, y: 10.2 * T });
   props.push({ kind: "rock", x: 29.2 * T, y: 14.4 * T });
 
@@ -1269,14 +1326,309 @@ function buildField(backX: number, backY: number): MapDef {
     start: { x: 16 * T, y: 3.2 * T },
     pxW: cols * T,
     pxH: rows * T,
-    portals: [{ x: 14 * T, y: 0, w: 4 * T, h: 1.15 * T, to: "ambercross", tx: backX, ty: backY }],
+    levels: "Lv 2 – 9",
+    portals: [
+      { x: 14 * T, y: 0, w: 4 * T, h: 1.15 * T, to: "ambercross", tx: backX, ty: backY },
+      { x: 14 * T, y: (rows - 1.15) * T, w: 4 * T, h: 1.15 * T, to: "woods", tx: 17.6 * T, ty: 2.8 * T },
+    ],
     spawns,
+  };
+}
+
+type Gate = { side: "N" | "S" | "E" | "W"; at: number; len: number; to: MapId; tx: number; ty: number; label: string };
+type Patch = { tile: number; x: number; y: number; w: number; h: number; solid?: boolean };
+type Group = { kind: MonsterKind; x: number; y: number; n: number; r: number };
+type Theme = "meadow" | "woods" | "dunes" | "crypt";
+
+type WildOpts = {
+  id: MapId;
+  name: string;
+  subtitle: string;
+  levels: string;
+  cols: number;
+  rows: number;
+  base: number;
+  lane: number;
+  seed: number;
+  theme: Theme;
+  patches: Patch[];
+  gates: Gate[];
+  groups: Group[];
+  start: { x: number; y: number };
+  tint?: string;
+  vignette?: number;
+};
+
+const BLOCKING_PROPS = new Set(["tree", "cactus", "tomb", "pillar"]);
+
+function buildWild(o: WildOpts): MapDef {
+  const { cols, rows } = o;
+  const T = TILE;
+  const ground = new Uint8Array(cols * rows);
+  const block = new Uint8Array(cols * rows);
+  paint(ground, cols, rows, 0, 0, cols, rows, o.base);
+  const lanes: { x: number; y: number; w: number; h: number }[] = [];
+  const portals: Portal[] = [];
+  const props: Prop[] = [];
+
+  for (const g of o.gates) {
+    const horiz = g.side === "N" || g.side === "S";
+    const lane = horiz
+      ? { x: g.at, y: g.side === "N" ? 0 : rows - 7, w: g.len, h: 7 }
+      : { x: g.side === "W" ? 0 : cols - 7, y: g.at, w: 7, h: g.len };
+    lanes.push(lane);
+    paint(ground, cols, rows, lane.x, lane.y, lane.w, lane.h, o.lane);
+  }
+  for (const pt of o.patches) paint(ground, cols, rows, pt.x, pt.y, pt.w, pt.h, pt.tile);
+
+  const isGate = (x: number, y: number) =>
+    o.gates.some((g) => {
+      if (g.side === "N") return y === 0 && x >= g.at && x < g.at + g.len;
+      if (g.side === "S") return y === rows - 1 && x >= g.at && x < g.at + g.len;
+      if (g.side === "W") return x === 0 && y >= g.at && y < g.at + g.len;
+      return x === cols - 1 && y >= g.at && y < g.at + g.len;
+    });
+  const inLane = (x: number, y: number) => lanes.some((l) => x >= l.x - 1 && x < l.x + l.w + 1 && y >= l.y - 1 && y < l.y + l.h + 1);
+
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const edge = x === 0 || y === 0 || x === cols - 1 || y === rows - 1;
+      if (edge && !isGate(x, y)) block[y * cols + x] = 1;
+      if (ground[y * cols + x] === 3) block[y * cols + x] = 1;
+    }
+  }
+
+  for (const g of o.gates) {
+    const gx = g.side === "N" || g.side === "S" ? (g.at + g.len / 2) * T : g.side === "W" ? 0 : cols * T;
+    const gy = g.side === "W" || g.side === "E" ? (g.at + g.len / 2) * T : g.side === "N" ? 0 : rows * T;
+    if (g.side === "N" || g.side === "S") {
+      portals.push({ x: g.at * T, y: g.side === "N" ? 0 : (rows - 1.15) * T, w: g.len * T, h: 1.15 * T, to: g.to, tx: g.tx, ty: g.ty });
+      props.push({ kind: "arch", x: gx, y: g.side === "N" ? 1.15 * T : (rows - 0.1) * T, w: (g.len + 1.2) * T, h: 3 * T });
+      props.push({ kind: "sign", x: gx - (g.len / 2 + 1.6) * T, y: g.side === "N" ? 2.6 * T : (rows - 2.2) * T, label: g.label });
+    } else {
+      portals.push({ x: g.side === "W" ? 0 : (cols - 1.3) * T, y: g.at * T, w: 1.3 * T, h: g.len * T, to: g.to, tx: g.tx, ty: g.ty });
+      props.push({ kind: "sign", x: g.side === "W" ? 2.4 * T : (cols - 2.4) * T, y: gy - (g.len / 2 + 0.6) * T, label: g.label });
+    }
+  }
+
+  const rand = rng(o.seed);
+  const T3 = (x: number, y: number) => ({ x: (x + 0.5) * T, y: (y + 0.85) * T });
+  const density: Record<Theme, [string, number][]> = {
+    meadow: [["tree", 0.05], ["flower", 0.11], ["rock", 0.008]],
+    woods: [["tree", 0.2], ["flower", 0.03], ["rock", 0.01]],
+    dunes: [["cactus", 0.03], ["rock", 0.03], ["bones", 0.008]],
+    crypt: [["tomb", 0.03], ["pillar", 0.014], ["bones", 0.03], ["torch", 0.006]],
+  };
+  for (let y = 1; y < rows - 1; y++) {
+    for (let x = 1; x < cols - 1; x++) {
+      if (block[y * cols + x] || inLane(x, y)) continue;
+      const roll = rand();
+      let acc = 0;
+      for (const [kind, p] of density[o.theme]) {
+        acc += p;
+        if (roll >= acc) continue;
+        const pos = T3(x, y);
+        if (kind === "flower") props.push({ kind: "flower", x: pos.x, y: pos.y - 0.1 * T, hue: rand() < 0.5 ? "#f2d7a2" : "#d4687a" });
+        else props.push({ kind: kind as Prop["kind"], x: pos.x, y: pos.y });
+        if (BLOCKING_PROPS.has(kind)) block[y * cols + x] = 1;
+        break;
+      }
+    }
+  }
+  const edgeKind: Record<Theme, Prop["kind"]> = { meadow: "tree", woods: "tree", dunes: "cactus", crypt: "pillar" };
+  for (let x = 0; x < cols; x += 2) {
+    if (!isGate(x, 0)) props.push({ kind: edgeKind[o.theme], x: (x + 0.5) * T, y: 0.8 * T });
+    if (!isGate(x, rows - 1)) props.push({ kind: edgeKind[o.theme], x: (x + 0.5) * T, y: (rows - 0.2) * T });
+  }
+
+  const spawns: { kind: MonsterKind; x: number; y: number }[] = [];
+  for (const grp of o.groups) {
+    let placed = 0;
+    for (let tries = 0; tries < grp.n * 30 && placed < grp.n; tries++) {
+      const a = rand() * Math.PI * 2;
+      const rr = Math.sqrt(rand()) * grp.r;
+      const tx = Math.round(grp.x + Math.cos(a) * rr);
+      const ty = Math.round(grp.y + Math.sin(a) * rr * 0.8);
+      if (tx < 2 || ty < 2 || tx > cols - 3 || ty > rows - 3) continue;
+      if (ground[ty * cols + tx] === 3 || inLane(tx, ty)) continue;
+      spawns.push({ kind: grp.kind, x: (tx + 0.5) * T, y: (ty + 0.6) * T });
+      placed++;
+    }
+  }
+  for (const s of spawns) {
+    const tx = Math.floor(s.x / T);
+    const ty = Math.floor(s.y / T);
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const x = tx + dx;
+        const y = ty + dy;
+        if (x <= 0 || y <= 0 || x >= cols - 1 || y >= rows - 1) continue;
+        if (ground[y * cols + x] === 3) continue;
+        block[y * cols + x] = 0;
+      }
+    }
+  }
+  const kept = props.filter((p) => {
+    if (!BLOCKING_PROPS.has(p.kind) || p.y < 1.2 * T || p.y > (rows - 0.5) * T) return true;
+    const tx = Math.floor(p.x / T);
+    const ty = Math.floor((p.y - 4) / T);
+    if (tx < 0 || ty < 0 || tx >= cols || ty >= rows) return true;
+    return block[ty * cols + tx] === 1;
+  });
+
+  return {
+    id: o.id,
+    name: o.name,
+    subtitle: o.subtitle,
+    music: "field",
+    cols,
+    rows,
+    ground,
+    block,
+    props: kept,
+    npcs: [],
+    plaza: { x: o.start.x * T, y: o.start.y * T },
+    start: { x: o.start.x * T, y: o.start.y * T },
+    pxW: cols * T,
+    pxH: rows * T,
+    portals,
+    spawns,
+    levels: o.levels,
+    tint: o.tint,
+    vignette: o.vignette,
   };
 }
 
 const city = buildCity();
 const field = buildField(16 * TILE, 22.4 * TILE);
-const MAPS: Record<MapId, MapDef> = { ambercross: city, southmead: field };
+const T0 = TILE;
+
+const poring = buildWild({
+  id: "poring",
+  name: "Poring Fields",
+  subtitle: "Sunny grass east of the capital",
+  levels: "Lv 1 – 6",
+  cols: 40,
+  rows: 30,
+  base: 0,
+  lane: 2,
+  seed: 71,
+  theme: "meadow",
+  start: { x: 3.4, y: 15.6 },
+  patches: [
+    { tile: 3, x: 15, y: 3, w: 8, h: 5, solid: true },
+    { tile: 3, x: 29, y: 20, w: 7, h: 5, solid: true },
+    { tile: 2, x: 8, y: 15, w: 28, h: 2 },
+  ],
+  gates: [
+    { side: "W", at: 14, len: 3, to: "ambercross", tx: 29.2 * T0, ty: 16 * T0, label: "Ambercross" },
+    { side: "E", at: 14, len: 3, to: "crypt", tx: 2.6 * T0, ty: 15.6 * T0, label: "Culvert Crypt" },
+  ],
+  groups: [
+    { kind: "poring", x: 9, y: 8, n: 9, r: 6 },
+    { kind: "poring", x: 12, y: 22, n: 7, r: 5 },
+    { kind: "drops", x: 27, y: 9, n: 7, r: 5 },
+    { kind: "lunatic", x: 20, y: 20, n: 6, r: 5 },
+    { kind: "fabre", x: 24, y: 13, n: 6, r: 4 },
+    { kind: "fabre", x: 6, y: 25, n: 4, r: 3 },
+    { kind: "pupa", x: 32, y: 7, n: 4, r: 3 },
+  ],
+});
+
+const woods = buildWild({
+  id: "woods",
+  name: "Willow Woods",
+  subtitle: "Dense forest below Southmead",
+  levels: "Lv 4 – 14",
+  cols: 36,
+  rows: 32,
+  base: 6,
+  lane: 2,
+  seed: 113,
+  theme: "woods",
+  start: { x: 17.6, y: 3.2 },
+  patches: [
+    { tile: 3, x: 5, y: 18, w: 7, h: 6, solid: true },
+    { tile: 2, x: 16, y: 6, w: 4, h: 18 },
+    { tile: 2, x: 20, y: 14, w: 12, h: 3 },
+  ],
+  gates: [{ side: "N", at: 16, len: 4, to: "southmead", tx: 16 * T0, ty: 27.4 * T0, label: "Southmead" }],
+  groups: [
+    { kind: "willow", x: 9, y: 9, n: 8, r: 6 },
+    { kind: "willow", x: 27, y: 9, n: 6, r: 5 },
+    { kind: "fabre", x: 12, y: 14, n: 4, r: 3 },
+    { kind: "rocker", x: 26, y: 22, n: 7, r: 5 },
+    { kind: "rocker", x: 12, y: 27, n: 5, r: 4 },
+    { kind: "creamy", x: 28, y: 15, n: 5, r: 4 },
+    { kind: "hornet", x: 22, y: 27, n: 5, r: 4 },
+    { kind: "hornet", x: 6, y: 8, n: 3, r: 3 },
+  ],
+});
+
+const dunes = buildWild({
+  id: "dunes",
+  name: "Sograt Dunes",
+  subtitle: "Burning sands west of the capital",
+  levels: "Lv 5 – 20",
+  cols: 40,
+  rows: 30,
+  base: 4,
+  lane: 2,
+  seed: 233,
+  theme: "dunes",
+  start: { x: 36.6, y: 15.6 },
+  patches: [
+    { tile: 3, x: 8, y: 4, w: 8, h: 5, solid: true },
+    { tile: 6, x: 6, y: 3, w: 12, h: 8 },
+    { tile: 3, x: 8, y: 4, w: 8, h: 5, solid: true },
+    { tile: 2, x: 4, y: 14, w: 33, h: 3 },
+  ],
+  gates: [{ side: "E", at: 14, len: 3, to: "ambercross", tx: 2.6 * T0, ty: 16 * T0, label: "Ambercross" }],
+  groups: [
+    { kind: "condor", x: 28, y: 6, n: 6, r: 5 },
+    { kind: "condor", x: 8, y: 22, n: 4, r: 4 },
+    { kind: "scorpion", x: 16, y: 22, n: 6, r: 5 },
+    { kind: "scorpion", x: 26, y: 8, n: 4, r: 4 },
+    { kind: "desert-wolf", x: 24, y: 20, n: 6, r: 5 },
+    { kind: "desert-wolf", x: 10, y: 11, n: 4, r: 3 },
+    { kind: "peco-peco", x: 8, y: 17, n: 5, r: 4 },
+    { kind: "peco-peco", x: 31, y: 23, n: 5, r: 4 },
+  ],
+  tint: "rgba(255,196,96,0.10)",
+});
+
+const crypt = buildWild({
+  id: "crypt",
+  name: "Culvert Crypt",
+  subtitle: "Cold stone below the old road",
+  levels: "Lv 8 – 25",
+  cols: 36,
+  rows: 32,
+  base: 5,
+  lane: 5,
+  seed: 331,
+  theme: "crypt",
+  start: { x: 3.4, y: 15.6 },
+  patches: [
+    { tile: 3, x: 15, y: 5, w: 6, h: 4, solid: true },
+    { tile: 6, x: 22, y: 20, w: 8, h: 6 },
+  ],
+  gates: [{ side: "W", at: 14, len: 3, to: "poring", tx: 37.4 * T0, ty: 15.6 * T0, label: "Poring Fields" }],
+  groups: [
+    { kind: "familiar", x: 9, y: 8, n: 6, r: 5 },
+    { kind: "familiar", x: 11, y: 24, n: 5, r: 4 },
+    { kind: "skeleton", x: 17, y: 18, n: 6, r: 5 },
+    { kind: "skeleton", x: 27, y: 7, n: 5, r: 4 },
+    { kind: "zombie", x: 22, y: 25, n: 6, r: 4 },
+    { kind: "zombie", x: 29, y: 17, n: 4, r: 3 },
+    { kind: "poporing", x: 6, y: 20, n: 4, r: 3 },
+    { kind: "golden-bug", x: 31, y: 26, n: 1, r: 0 },
+  ],
+  tint: "rgba(30,24,70,0.22)",
+  vignette: 0.55,
+});
+
+const MAPS: Record<MapId, MapDef> = { ambercross: city, southmead: field, poring, woods, dunes, crypt };
 
 export function getMap(id: MapId) {
   return MAPS[id];

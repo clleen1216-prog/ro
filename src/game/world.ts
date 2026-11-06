@@ -6,8 +6,13 @@ import {
   MONSTERS,
   SKILLS,
   canEquip,
+  MAX_BASE,
+  TILE as TILE_PX,
+  MAX_JOB,
   expNeed,
   getMap,
+  jobExpNeed,
+  sellPrice,
   jobBonus,
   rollLoot,
 } from "@/game/content";
@@ -71,6 +76,8 @@ export const world = {
   viewH: 600,
   dpr: 1,
   hover: "",
+  /** click-to-move marker */
+  clickMark: null as null | { x: number; y: number; t: number },
 };
 
 let rev = 0;
@@ -245,7 +252,7 @@ export function makePlayer(draft = world.draft): Player {
 
 export function spawnMonsters(mapId: MapId): Monster[] {
   return getMap(mapId).spawns.map((s, i) => {
-    const st = MONSTERS[s.kind];
+    const st = MONSTERS[s.kind]!;
     return {
       id: `${s.kind}-${i}-${uid()}`,
       kind: s.kind,
@@ -266,6 +273,13 @@ export function spawnMonsters(mapId: MapId): Monster[] {
       wanderY: s.y,
       pause: Math.random() * 2,
       moving: false,
+      ease: 0,
+      dyingT: 0,
+      windup: 0,
+      lunge: 0,
+      kbx: 0,
+      kby: 0,
+      spawnT: 0.5,
     };
   });
 }
@@ -286,7 +300,8 @@ export function enterMap(id: MapId, x: number, y: number) {
   const map = getMap(id);
   world.banner = map.name;
   world.bannerUntil = world.time + 2.8;
-  log(`You arrive in ${map.name}.`);
+  world.clickMark = null;
+  log(map.levels ? `You arrive in ${map.name}. Monsters here: ${map.levels}.` : `You arrive in ${map.name}.`);
   bump();
 }
 
@@ -338,6 +353,7 @@ export function continueGame() {
     data.player.speedInstant = 0;
     data.player.swing = 0;
     data.player.feign = 0;
+    data.player.inv = data.player.inv.filter((st) => ITEMS[st.itemId]);
     const legacy: Record<string, Player["job"]> = {
       wanderer: "novice",
       blade: "swordman",
@@ -351,7 +367,7 @@ export function continueGame() {
     data.player.job = legacy[savedJob] ?? (savedJob === "novice" || savedJob === "swordman" || savedJob === "mage" || savedJob === "archer" ? savedJob : "novice");
     data.player.hotbar = data.player.hotbar.map((slot) => (slot && slot.kind === "skill" && !(slot.id in SKILLS) ? null : slot));
     world.player = data.player;
-    world.mapId = data.mapId === "southmead" ? "southmead" : "ambercross";
+    world.mapId = (["ambercross", "southmead", "poring", "woods", "dunes", "crypt"] as MapId[]).includes(data.mapId) ? data.mapId : "ambercross";
     world.monsters = spawnMonsters(world.mapId);
     world.drops = [];
     world.path = [];
@@ -385,9 +401,38 @@ export function persist() {
   world.hasSave = true;
 }
 
-export function float(x: number, y: number, text: string, color: string) {
-  world.floats.push({ x, y, text, life: 0.9, color });
-  if (world.floats.length > 28) world.floats.shift();
+export function float(x: number, y: number, text: string, color: string, big = false) {
+  world.floats.push({ x, y, text, life: big ? 1.15 : 0.9, color, big });
+  if (world.floats.length > 36) world.floats.shift();
+}
+
+const DUST_COLOR: Record<number, string> = {
+  0: "#9cc58a",
+  1: "#d8cfb8",
+  2: "#c9a878",
+  3: "#9ac8e8",
+  4: "#e8d4a0",
+  5: "#9a96b0",
+  6: "#6a9a62",
+};
+
+/** A small puff kicked up by footsteps, tinted to the ground underfoot. */
+export function dust(x: number, y: number, tile: number) {
+  const color = DUST_COLOR[tile] ?? "#cfc3a8";
+  for (let i = 0; i < 2; i++) {
+    world.particles.push({
+      x,
+      y,
+      vx: (Math.random() - 0.5) * 22,
+      vy: -8 - Math.random() * 12,
+      life: 0.42,
+      max: 0.42,
+      color,
+      size: 3 + Math.random() * 2.5,
+      puff: true,
+    });
+  }
+  if (world.particles.length > 220) world.particles.splice(0, world.particles.length - 220);
 }
 
 export function burst(x: number, y: number, color: string) {
@@ -399,12 +444,15 @@ export function burst(x: number, y: number, color: string) {
       vx: Math.cos(a) * 40,
       vy: Math.sin(a) * 28 - 20,
       life: 0.6,
+      max: 0.6,
       color,
+      grav: 90,
     });
   }
 }
 
-const INV_MAX = 28;
+export const INV_CAP = 40;
+const INV_MAX = INV_CAP;
 
 export function addItem(itemId: string, qty: number) {
   const p = world.player;
@@ -513,6 +561,40 @@ export function useStack(index: number) {
   if (!it || it.slot !== "use") return;
   if (p.itemCd > 0) return;
   const d = derive(p);
+  if (it.effect === "fly") {
+    const map = getMap(world.mapId);
+    for (let i = 0; i < 60; i++) {
+      const tx = 2 + Math.floor(Math.random() * (map.cols - 4));
+      const ty = 2 + Math.floor(Math.random() * (map.rows - 4));
+      if (map.block[ty * map.cols + tx]) continue;
+      burst(p.x, p.y - 30, "#f6f0e4");
+      p.x = (tx + 0.5) * TILE_PX;
+      p.y = (ty + 0.5) * TILE_PX;
+      burst(p.x, p.y - 30, "#f6f0e4");
+      break;
+    }
+    world.path = [];
+    world.targetId = null;
+    world.cam.x = p.x - world.viewW / 2;
+    world.cam.y = p.y - world.viewH / 2;
+    log("You vanish and reappear elsewhere.");
+    p.itemCd = 0.6;
+    stack.qty -= 1;
+    if (stack.qty <= 0) p.inv.splice(index, 1);
+    persist();
+    bump();
+    return;
+  }
+  if (it.effect === "butterfly") {
+    const home = getMap("ambercross");
+    stack.qty -= 1;
+    if (stack.qty <= 0) p.inv.splice(index, 1);
+    p.itemCd = 0.6;
+    burst(p.x, p.y - 30, "#9ec7ee");
+    enterMap("ambercross", home.start.x, home.start.y);
+    sfxHeal();
+    return;
+  }
   if (it.heal) {
     if (p.hp >= d.maxHp) {
       log("HP is already full.");
@@ -610,7 +692,7 @@ export function tryBuy(itemId: string) {
   if (!p || !it) return;
   const price = buyPrice(it.price);
   if (p.marks < price) {
-    log("Not enough marks.");
+    log("Not enough zeny.");
     bump();
     return;
   }
@@ -633,12 +715,12 @@ export function trySell(index: number) {
   if (!stack) return;
   const it = ITEMS[stack.itemId];
   if (!it) return;
-  const price = Math.max(1, Math.floor(it.price * 0.45));
+  const price = sellPrice(it);
   p.marks += price;
   stack.qty -= 1;
   if (stack.qty <= 0) p.inv.splice(index, 1);
   sfxCoin();
-  log(`Sold for ${price} marks.`);
+  log(`Sold for ${price}z.`);
   persist();
   bump();
 }
@@ -681,7 +763,7 @@ export function resetStats() {
   const p = world.player;
   if (!p) return;
   if (p.marks < 200) {
-    log("Oren asks 200 marks to unwind your training.");
+    log("Oren asks 200 zeny to unwind your training.");
     bump();
     return;
   }
@@ -731,18 +813,52 @@ export function changeJob(job: JobId) {
   bump();
 }
 
-export function grantKill(kind: Monster["kind"]) {
+export function grantKill(kind: Monster["kind"], mx?: number, my?: number) {
   const p = world.player;
   if (!p) return;
-  const st = MONSTERS[kind];
-  p.baseExp += st.exp;
-  p.jobExp += st.jexp;
+  const st = MONSTERS[kind]!;
+  const x = mx ?? p.x;
+  const y = my ?? p.y;
+  // Fighting far above your level pays less, like the classic level-gap penalty.
+  const gap = p.baseLevel - st.level;
+  const mult = gap > 8 ? Math.max(0.25, 1 - (gap - 8) * 0.08) : 1;
+  const exp = Math.max(1, Math.round(st.exp * mult));
+  const jexp = Math.max(1, Math.round(st.jexp * mult));
+  if (p.baseLevel < MAX_BASE) p.baseExp += exp;
+  if (p.jobLevel < MAX_JOB) p.jobExp += jexp;
   const loot = rollLoot(kind);
   p.marks += loot.marks;
-  float(p.x, p.y - 78, `+${st.exp} EXP`, "#e4b15a");
-  float(p.x + 8, p.y - 60, `+${loot.marks}m`, "#f2d7a2");
-  for (const drop of loot.items) give(drop.id, drop.qty);
-  if (loot.rare) log("A rare find glints in the grass.");
+  float(p.x, p.y - 78, `+${exp} Base`, "#e4b15a");
+  float(p.x - 6, p.y - 62, `+${jexp} Job`, "#8fd0e8");
+  float(p.x + 8, p.y - 46, `+${loot.marks}z`, "#f2d7a2");
+  // Items fall to the ground where the monster died. Walk over them to pick up.
+  loot.items.forEach((drop, i) => {
+    const rare = loot.rareIds.includes(drop.id) || (st.boss ?? false);
+    const ang = Math.random() * Math.PI * 2 + i;
+    const r = 14 + Math.random() * 22;
+    world.drops.push({
+      id: uid(),
+      itemId: drop.id,
+      qty: drop.qty,
+      x: x + Math.cos(ang) * r,
+      y: y + Math.sin(ang) * r * 0.6 + 6,
+      mapId: world.mapId,
+      born: world.time,
+      dx: Math.cos(ang) * r,
+      ttl: 90,
+      rare,
+    });
+    if (rare) {
+      log(`A rare ${ITEMS[drop.id]?.name ?? "item"} drops!`);
+      burst(x, y - 20, "#e4b15a");
+    }
+  });
+  if (loot.items.length === 0) log(`${st.name} defeated. +${exp} Base, +${jexp} Job, +${loot.marks}z.`);
+  else log(`${st.name} defeated. +${exp} Base, +${jexp} Job, +${loot.marks}z. ${loot.items.length} drop${loot.items.length > 1 ? "s" : ""}.`);
+  if (st.boss) {
+    world.shake = Math.min(9, world.shake + 6);
+    log(`${st.name} has fallen!`);
+  }
   if (kind === "dew" && p.quest === "active") {
     p.questCount += 1;
     if (p.questCount >= 6) {
@@ -751,15 +867,15 @@ export function grantKill(kind: Monster["kind"]) {
     }
   }
   let leveled = false;
-  while (p.baseLevel < 15 && p.baseExp >= expNeed(p.baseLevel)) {
+  while (p.baseLevel < MAX_BASE && p.baseExp >= expNeed(p.baseLevel)) {
     p.baseExp -= expNeed(p.baseLevel);
     p.baseLevel += 1;
-    p.statPoints += 3;
+    p.statPoints += 3 + Math.floor(p.baseLevel / 10);
     leveled = true;
-    log(`Base level ${p.baseLevel}.`);
+    log(`Base level ${p.baseLevel}!`);
   }
-  while (p.jobLevel < 10 && p.jobExp >= expNeed(p.jobLevel)) {
-    p.jobExp -= expNeed(p.jobLevel);
+  while (p.jobLevel < MAX_JOB && p.jobExp >= jobExpNeed(p.jobLevel)) {
+    p.jobExp -= jobExpNeed(p.jobLevel);
     p.jobLevel += 1;
     p.skillPoints += 1;
     leveled = true;
@@ -771,6 +887,7 @@ export function grantKill(kind: Monster["kind"]) {
     p.sp = d.maxSp;
     sfxLevel();
     burst(p.x, p.y - 30, "#e4b15a");
+    float(p.x, p.y - 96, "LEVEL UP!", "#ffe27a", true);
     world.shake = Math.min(7, world.shake + 4);
   }
   persist();
@@ -890,7 +1007,7 @@ export function doAction(action: string) {
     p.marks += 150;
     give("sun-cap", 1);
     sfxCoin();
-    log("Maela hands you a sun cap and 150 marks.");
+    log("Maela hands you a sun cap and 150 zeny.");
   } else if (action.startsWith("job:")) {
     changeJob(action.slice(4) as JobId);
   }

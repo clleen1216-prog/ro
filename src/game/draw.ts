@@ -1,10 +1,54 @@
 import { images } from "@/game/assets";
+import { drawCreature, hasLook } from "@/game/creatures";
 import { ITEMS, MONSTERS, TILE, getMap, trimHex, type ItemDef } from "@/game/content";
 import { getLook } from "@/game/looks";
 import type { Dir, GearSlot, IconKind, Player } from "@/game/types";
 import { world } from "@/game/world";
 
 const GROUND = ["grass", "cobble", "dirt", "water"] as const;
+const PROC_BASE: Record<number, string> = { 4: "#dcc48c", 5: "#5c586f", 6: "#3d7646" };
+const MINI_COL: Record<number, string> = { 0: "#3e7a48", 1: "#cbb892", 2: "#b08958", 3: "#3d8fd1", 4: "#d8c08a", 5: "#5c586f", 6: "#2f5e3a" };
+
+function hash2(x: number, y: number, i: number) {
+  let h = (x * 374761393 + y * 668265263 + i * 2147483647) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
+function paintProcTile(g: CanvasRenderingContext2D, tile: number, dx: number, dy: number, tx: number, ty: number) {
+  if (tile === 6 && images.grass) {
+    g.drawImage(images.grass, dx, dy, TILE + 0.6, TILE + 0.6);
+    g.fillStyle = "rgba(8,44,22,0.42)";
+    g.fillRect(dx, dy, TILE + 0.6, TILE + 0.6);
+    return;
+  }
+  g.fillStyle = PROC_BASE[tile] ?? "#6ea86a";
+  g.fillRect(dx, dy, TILE + 0.6, TILE + 0.6);
+  const n = tile === 5 ? 4 : 9;
+  for (let i = 0; i < n; i++) {
+    const px = dx + hash2(tx, ty, i) * (TILE - 4);
+    const py = dy + hash2(tx, ty, i + 40) * (TILE - 4);
+    const light = hash2(tx, ty, i + 80) > 0.5;
+    g.fillStyle = tile === 4 ? (light ? "rgba(255,244,210,0.45)" : "rgba(150,110,50,0.22)") : tile === 5 ? (light ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.16)") : light ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.12)";
+    if (tile === 4) {
+      g.beginPath();
+      g.ellipse(px, py, 6 + hash2(tx, ty, i + 9) * 8, 1.6, 0, 0, Math.PI * 2);
+      g.fill();
+    } else g.fillRect(px, py, 3 + hash2(tx, ty, i + 5) * 5, 3);
+  }
+  if (tile === 5) {
+    g.strokeStyle = "rgba(10,8,24,0.45)";
+    g.lineWidth = 1.5;
+    g.strokeRect(dx + 0.75, dy + 0.75, TILE - 1.5, TILE - 1.5);
+    if (hash2(tx, ty, 99) > 0.8) {
+      g.beginPath();
+      g.moveTo(dx + 8, dy + 10);
+      g.lineTo(dx + 22, dy + 24);
+      g.lineTo(dx + 18, dy + 38);
+      g.stroke();
+    }
+  }
+}
 
 let groundKey = "";
 let groundCanvas: HTMLCanvasElement | null = null;
@@ -185,6 +229,111 @@ function paintIcon(ctx: CanvasRenderingContext2D, kind: IconKind) {
     ctx.arc(3, 2, 5, 0, Math.PI * 2);
     ctx.arc(0, -2, 4, 0, Math.PI * 2);
     ctx.fill();
+  } else if (kind === "apple") {
+    ctx.beginPath();
+    ctx.arc(-3, 2, 6, 0, Math.PI * 2);
+    ctx.arc(3, 2, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#4f8a38";
+    ctx.fillRect(-0.8, -8, 1.8, 5);
+    ctx.beginPath();
+    ctx.ellipse(4, -6, 4, 2, -0.5, 0, Math.PI * 2);
+    ctx.fill();
+  } else if (kind === "herb") {
+    ctx.strokeStyle = String(fill);
+    ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    ctx.moveTo(0, 10);
+    ctx.lineTo(0, -4);
+    ctx.moveTo(0, 4);
+    ctx.quadraticCurveTo(-9, 2, -8, -6);
+    ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(9, -2, 8, -10);
+    ctx.stroke();
+  } else if (kind === "bone") {
+    ctx.save();
+    ctx.rotate(-0.7);
+    ctx.fillRect(-9, -2, 18, 4);
+    ctx.beginPath();
+    ctx.arc(-9, -3, 3, 0, Math.PI * 2);
+    ctx.arc(-9, 3, 3, 0, Math.PI * 2);
+    ctx.arc(9, -3, 3, 0, Math.PI * 2);
+    ctx.arc(9, 3, 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  } else if (kind === "claw") {
+    ctx.beginPath();
+    ctx.moveTo(-6, 10);
+    ctx.quadraticCurveTo(-8, -6, 6, -10);
+    ctx.quadraticCurveTo(0, -2, 2, 10);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  } else if (kind === "plume") {
+    ctx.beginPath();
+    ctx.moveTo(-6, 10);
+    ctx.quadraticCurveTo(-10, -4, 6, -11);
+    ctx.quadraticCurveTo(10, 0, -6, 10);
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-6, 10);
+    ctx.lineTo(3, -6);
+    ctx.stroke();
+  } else if (kind === "gem") {
+    ctx.beginPath();
+    ctx.moveTo(0, -10);
+    ctx.lineTo(9, -2);
+    ctx.lineTo(0, 10);
+    ctx.lineTo(-9, -2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "rgba(255,255,255,0.55)";
+    ctx.beginPath();
+    ctx.moveTo(-5, -3);
+    ctx.lineTo(0, -8);
+    ctx.lineTo(1, -3);
+    ctx.fill();
+  } else if (kind === "card") {
+    roundRect(ctx, -7, -10, 14, 20, 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = "#2a2118";
+    ctx.fillRect(-4, -7, 8, 9);
+    ctx.fillStyle = "#f6f0e4";
+    ctx.fillRect(-4, 5, 8, 2);
+  } else if (kind === "sting") {
+    ctx.beginPath();
+    ctx.moveTo(0, -11);
+    ctx.lineTo(4, 6);
+    ctx.lineTo(-4, 6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  } else if (kind === "cloth") {
+    ctx.fillRect(-9, -6, 18, 5);
+    ctx.fillRect(-7, 0, 14, 5);
+    ctx.fillRect(-9, 6, 18, 4);
+    ctx.strokeRect(-9, -6, 18, 16);
+  } else if (kind === "mucus") {
+    ctx.beginPath();
+    ctx.moveTo(-8, 6);
+    ctx.quadraticCurveTo(-8, -8, 0, -9);
+    ctx.quadraticCurveTo(8, -8, 8, 6);
+    ctx.quadraticCurveTo(0, 10, -8, 6);
+    ctx.fill();
+    ctx.stroke();
+  } else if (kind === "wingfly") {
+    ctx.beginPath();
+    ctx.moveTo(0, 8);
+    ctx.quadraticCurveTo(-14, 2, -10, -9);
+    ctx.quadraticCurveTo(-2, -4, 0, 8);
+    ctx.moveTo(0, 8);
+    ctx.quadraticCurveTo(14, 2, 10, -9);
+    ctx.quadraticCurveTo(2, -4, 0, 8);
+    ctx.fill();
+    ctx.stroke();
   } else if (kind === "wing") {
     ctx.beginPath();
     ctx.moveTo(-2, 4);
@@ -514,7 +663,7 @@ function drawActor(
   drawGear(ctx, px, py + (sit ? 8 : 0), dir, h, eq, false, swing);
 }
 
-function facingCell(kind: keyof typeof MONSTERS, dir: Dir) {
+function facingCell(kind: string, dir: Dir) {
   if (kind === "wasp") {
     if (dir === 1) return 2;
     if (dir === 2) return 1;
@@ -524,22 +673,40 @@ function facingCell(kind: keyof typeof MONSTERS, dir: Dir) {
 
 function drawMonster(
   ctx: CanvasRenderingContext2D,
-  kind: keyof typeof MONSTERS,
+  kind: string,
   dir: Dir,
   anim: number,
   x: number,
   y: number,
   flash: number,
   moving: boolean,
+  fx: { scaleX?: number; scaleY?: number; alpha?: number; lift?: number; rot?: number } = {},
 ) {
+  const def = MONSTERS[kind];
+  if (!def) return;
+  const h = def.draw;
+  const t = world.time + anim;
+  const flyBob = def.fly ? Math.sin(t * 3.2) * 4 + 12 : 0;
+  shadow(ctx, x, y, h * 0.22 * (def.fly ? 0.8 : 1) * (fx.alpha ?? 1));
+  ctx.save();
+  ctx.globalAlpha = fx.alpha ?? 1;
+  if (hasLook(def.look)) {
+    ctx.translate(x, y - (fx.lift ?? 0) - flyBob);
+    if (fx.rot) ctx.rotate(fx.rot);
+    ctx.scale(fx.scaleX ?? 1, fx.scaleY ?? 1);
+    drawCreature(ctx, def.look, t, moving, dir, h, flash);
+    ctx.restore();
+    return;
+  }
   const img = images[kind];
-  if (!img) return;
+  if (!img) {
+    ctx.restore();
+    return;
+  }
   const cell = img.width / 2;
-  const h = MONSTERS[kind].draw;
   const pose = facingCell(kind, dir);
   const sx = (pose % 2) * cell;
   const sy = Math.floor(pose / 2) * cell;
-  const t = world.time + anim;
   let oy = 0;
   let scx = 1;
   let scy = 1;
@@ -559,14 +726,13 @@ function drawMonster(
     scx = 1 + b * 0.05;
     scy = 1 - b * 0.045;
   }
-  shadow(ctx, x, y, h * 0.22);
-  ctx.save();
-  ctx.translate(x, y + oy);
-  ctx.scale(scx, scy);
+  ctx.translate(x, y + oy - (fx.lift ?? 0));
+  if (fx.rot) ctx.rotate(fx.rot);
+  ctx.scale(scx * (fx.scaleX ?? 1), scy * (fx.scaleY ?? 1));
   ctx.drawImage(img, sx, sy, cell, cell, -h / 2, -h, h, h);
   if (flash > 0) {
     ctx.globalCompositeOperation = "lighter";
-    ctx.globalAlpha = 0.65;
+    ctx.globalAlpha = 0.65 * (fx.alpha ?? 1);
     ctx.drawImage(img, sx, sy, cell, cell, -h / 2, -h, h, h);
   }
   ctx.restore();
@@ -616,7 +782,8 @@ function bakedGround(map: ReturnType<typeof getMap>) {
       const img = images[GROUND[tile] ?? "grass"];
       const dx = tx * TILE;
       const dy = ty * TILE;
-      if (img) g.drawImage(img, dx, dy, TILE + 0.6, TILE + 0.6);
+      if (tile >= 4) paintProcTile(g, tile, dx, dy, tx, ty);
+      else if (img) g.drawImage(img, dx, dy, TILE + 0.6, TILE + 0.6);
       else {
         g.fillStyle = tile === 3 ? "#3d8fd1" : tile === 1 ? "#cbb892" : tile === 2 ? "#b08958" : "#6ea86a";
         g.fillRect(dx, dy, TILE + 0.6, TILE + 0.6);
@@ -643,7 +810,7 @@ function bakedMini(map: ReturnType<typeof getMap>) {
   for (let ty = 0; ty < map.rows; ty++) {
     for (let tx = 0; tx < map.cols; tx++) {
       const tile = map.ground[ty * map.cols + tx] ?? 0;
-      g.fillStyle = map.block[ty * map.cols + tx] ? "#3a342c" : tile === 3 ? "#3d8fd1" : tile === 1 ? "#cbb892" : tile === 2 ? "#b08958" : "#3e7a48";
+      g.fillStyle = map.block[ty * map.cols + tx] && tile !== 3 ? "#2c2a34" : (MINI_COL[tile] ?? "#3e7a48");
       g.fillRect(tx * TILE * sx, ty * TILE * sy, Math.ceil(TILE * sx), Math.ceil(TILE * sy));
     }
   }
@@ -718,6 +885,88 @@ export function renderFrame(canvas: HTMLCanvasElement, dt: number) {
           ctx.fillStyle = "#e4b15a";
           ctx.beginPath();
           ctx.arc(prop.x, prop.y - 34, 4, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (prop.kind === "cactus") {
+          shadow(ctx, prop.x, prop.y, 14);
+          const sway = Math.sin(world.time * 0.8 + prop.x) * 0.6;
+          ctx.fillStyle = "#4f8a4a";
+          ctx.strokeStyle = "#2a4a2a";
+          ctx.lineWidth = 1.5;
+          roundRect(ctx, prop.x - 6, prop.y - 46 + sway, 12, 46, 6);
+          ctx.fill();
+          ctx.stroke();
+          roundRect(ctx, prop.x - 18, prop.y - 34 + sway, 8, 20, 4);
+          ctx.fill();
+          ctx.stroke();
+          roundRect(ctx, prop.x + 10, prop.y - 40 + sway, 8, 22, 4);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = "#e8d6a0";
+          ctx.fillRect(prop.x - 1, prop.y - 38, 2, 2);
+          ctx.fillRect(prop.x + 2, prop.y - 24, 2, 2);
+        } else if (prop.kind === "tomb") {
+          shadow(ctx, prop.x, prop.y, 17);
+          ctx.fillStyle = "#8b879c";
+          ctx.strokeStyle = "#2a2838";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(prop.x - 14, prop.y);
+          ctx.lineTo(prop.x - 14, prop.y - 30);
+          ctx.arc(prop.x, prop.y - 30, 14, Math.PI, 0);
+          ctx.lineTo(prop.x + 14, prop.y);
+          ctx.closePath();
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = "#5a566c";
+          ctx.fillRect(prop.x - 1.5, prop.y - 38, 3, 16);
+          ctx.fillRect(prop.x - 6, prop.y - 33, 12, 3);
+        } else if (prop.kind === "pillar") {
+          shadow(ctx, prop.x, prop.y, 18);
+          ctx.fillStyle = "#6e6a84";
+          ctx.strokeStyle = "#2a2838";
+          ctx.lineWidth = 2;
+          ctx.fillRect(prop.x - 12, prop.y - 70, 24, 70);
+          ctx.strokeRect(prop.x - 12, prop.y - 70, 24, 70);
+          ctx.fillStyle = "#8b879c";
+          ctx.fillRect(prop.x - 17, prop.y - 76, 34, 9);
+          ctx.fillRect(prop.x - 16, prop.y - 8, 32, 8);
+          ctx.fillStyle = "rgba(0,0,0,0.18)";
+          ctx.fillRect(prop.x + 3, prop.y - 68, 9, 60);
+        } else if (prop.kind === "bones") {
+          ctx.strokeStyle = "#e9e2cf";
+          ctx.lineWidth = 3;
+          ctx.lineCap = "round";
+          ctx.beginPath();
+          ctx.moveTo(prop.x - 9, prop.y - 3);
+          ctx.lineTo(prop.x + 9, prop.y - 7);
+          ctx.moveTo(prop.x - 6, prop.y - 9);
+          ctx.lineTo(prop.x + 7, prop.y - 1);
+          ctx.stroke();
+          ctx.fillStyle = "#f2ecda";
+          ctx.beginPath();
+          ctx.arc(prop.x + 4, prop.y - 8, 5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = "#2a2118";
+          ctx.fillRect(prop.x + 2, prop.y - 9, 1.6, 2);
+          ctx.fillRect(prop.x + 5.4, prop.y - 9, 1.6, 2);
+        } else if (prop.kind === "torch") {
+          ctx.fillStyle = "#4a3a2a";
+          ctx.fillRect(prop.x - 2, prop.y - 40, 4, 40);
+          const fl = Math.sin(world.time * 14 + prop.x) * 2;
+          ctx.save();
+          const g2 = ctx.createRadialGradient(prop.x, prop.y - 46, 2, prop.x, prop.y - 46, 70);
+          g2.addColorStop(0, "rgba(255,170,70,0.38)");
+          g2.addColorStop(1, "rgba(255,170,70,0)");
+          ctx.fillStyle = g2;
+          ctx.fillRect(prop.x - 70, prop.y - 116, 140, 140);
+          ctx.restore();
+          ctx.fillStyle = "#ff9a3a";
+          ctx.beginPath();
+          ctx.ellipse(prop.x, prop.y - 46, 6, 10 + fl, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = "#ffe27a";
+          ctx.beginPath();
+          ctx.ellipse(prop.x, prop.y - 44, 3, 6 + fl * 0.5, 0, 0, Math.PI * 2);
           ctx.fill();
         } else if (prop.kind === "rock") {
           ctx.fillStyle = "#8d8678";
@@ -818,33 +1067,71 @@ export function renderFrame(canvas: HTMLCanvasElement, dt: number) {
   }
 
   for (const m of world.monsters) {
-    if (!m.alive) continue;
+    if (!m.alive && m.dyingT <= 0) continue;
     if (m.x < viewL || m.x > viewR || m.y < viewT || m.y > viewB) continue;
     drawers.push({
       y: m.y,
       draw: () => {
-        if (world.targetId === m.id) {
+        const def = MONSTERS[m.kind];
+        if (!def) return;
+        if (!m.alive) {
+          // Death: spin a little, flatten, fade out.
+          const k = 1 - m.dyingT / 0.6;
+          drawMonster(ctx, m.kind, m.dir, m.anim, m.x, m.y, k < 0.25 ? 1 : 0, false, {
+            alpha: 1 - k,
+            scaleX: 1 + k * 0.35,
+            scaleY: 1 - k * 0.8,
+            rot: (m.dir === 1 ? -1 : 1) * k * 0.6,
+            lift: Math.sin(k * Math.PI) * 14,
+          });
+          return;
+        }
+        const targeted = world.targetId === m.id;
+        if (targeted) {
+          const pulse = 1 + Math.sin(world.time * 6) * 0.06;
           ctx.strokeStyle = "#e4b15a";
+          ctx.lineWidth = 2;
           ctx.beginPath();
-          ctx.ellipse(m.x, m.y, 18, 7, 0, 0, Math.PI * 2);
+          ctx.ellipse(m.x, m.y, 20 * pulse + (def.boss ? 14 : 0), 8 * pulse + (def.boss ? 5 : 0), 0, 0, Math.PI * 2);
           ctx.stroke();
+          ctx.lineWidth = 1;
         }
         let lx = m.x;
         let ly = m.y;
-        const lunge = m.cd > 0.9 ? (m.cd - 0.9) * 36 : 0;
-        if (lunge > 0) {
-          if (m.dir === 0) ly += lunge;
-          else if (m.dir === 3) ly -= lunge;
-          else if (m.dir === 1) lx -= lunge;
-          else lx += lunge;
+        let sxs = 1;
+        let sys = 1;
+        const fwd = m.dir === 0 ? [0, 1] : m.dir === 3 ? [0, -1] : m.dir === 1 ? [-1, 0] : [1, 0];
+        if (m.windup > 0) {
+          // rear back and coil before the strike
+          const k = 1 - m.windup / 0.28;
+          lx -= fwd[0]! * k * 7;
+          ly -= fwd[1]! * k * 7;
+          sxs = 1 + k * 0.1;
+          sys = 1 - k * 0.12;
+        } else if (m.lunge > 0) {
+          const k = Math.sin((m.lunge / 0.2) * Math.PI * 0.5);
+          lx += fwd[0]! * k * 24;
+          ly += fwd[1]! * k * 24;
+          sxs = 1 - k * 0.08;
+          sys = 1 + k * 0.1;
         }
-        drawMonster(ctx, m.kind, m.dir, m.anim, lx, ly, m.hurt, m.moving);
-        label(ctx, MONSTERS[m.kind].name, m.x, m.y - MONSTERS[m.kind].draw - 8, "#f6f0e4");
-        if (m.hp < m.maxHp) {
-          ctx.fillStyle = "rgba(0,0,0,0.45)";
-          ctx.fillRect(m.x - 18, m.y - MONSTERS[m.kind].draw - 4, 36, 4);
-          ctx.fillStyle = "#d4534a";
-          ctx.fillRect(m.x - 18, m.y - MONSTERS[m.kind].draw - 4, 36 * (m.hp / m.maxHp), 4);
+        const pop = m.spawnT > 0 ? 1 - m.spawnT / 0.5 : 1;
+        const e = pop < 1 ? 1 - Math.pow(1 - pop, 3) : 1;
+        drawMonster(ctx, m.kind, m.dir, m.anim, lx, ly, m.hurt, m.moving, {
+          scaleX: sxs * (0.4 + 0.6 * e) * (1 + (m.hurt > 0 ? 0.08 : 0)),
+          scaleY: sys * (0.4 + 0.6 * e) * (1 - (m.hurt > 0 ? 0.08 : 0)),
+          alpha: Math.min(1, 0.3 + e),
+        });
+        const top = m.y - def.draw - (def.fly ? 18 : 0);
+        label(ctx, `${def.boss ? "★ " : ""}${def.name}`, m.x, top - 6, def.boss ? "#ffd86a" : "#f6f0e4");
+        if (m.hp < m.maxHp || targeted || def.boss) {
+          const bw = def.boss ? 56 : 36;
+          ctx.fillStyle = "rgba(0,0,0,0.55)";
+          ctx.fillRect(m.x - bw / 2 - 1, top - 1, bw + 2, 6);
+          ctx.fillStyle = "#3a1a1a";
+          ctx.fillRect(m.x - bw / 2, top, bw, 4);
+          ctx.fillStyle = m.hp / m.maxHp > 0.35 ? "#d4534a" : "#ff7a5a";
+          ctx.fillRect(m.x - bw / 2, top, bw * Math.max(0, m.hp / m.maxHp), 4);
         }
       },
     });
@@ -858,8 +1145,34 @@ export function renderFrame(canvas: HTMLCanvasElement, dt: number) {
     drawers.push({
       y: drop.y,
       draw: () => {
-        const bob = Math.sin(world.time * 4 + drop.x) * 3;
-        drawItemIcon(ctx, it, drop.x - 12, drop.y - 28 + bob, 24);
+        const age = world.time - (drop.born ?? -9);
+        // pop out of the monster in an arc, bounce once, then hover
+        let lift = 0;
+        let dxs = 0;
+        if (age < 0.5) {
+          const k = age / 0.5;
+          lift = Math.sin(k * Math.PI) * 34 * (1 - k * 0.3);
+          dxs = (1 - k) * -((drop.dx ?? 0));
+        } else lift = Math.abs(Math.sin((age - 0.5) * 7)) * Math.max(0, 6 - (age - 0.5) * 12);
+        const bob = age > 0.8 ? Math.sin(world.time * 4 + drop.x) * 2.5 : 0;
+        shadow(ctx, drop.x, drop.y, 10);
+        if (drop.rare) {
+          const glow = 0.35 + Math.sin(world.time * 5) * 0.15;
+          ctx.save();
+          const grad = ctx.createRadialGradient(drop.x, drop.y - 16, 2, drop.x, drop.y - 16, 30);
+          grad.addColorStop(0, `rgba(255,226,122,${glow + 0.25})`);
+          grad.addColorStop(1, "rgba(255,226,122,0)");
+          ctx.fillStyle = grad;
+          ctx.fillRect(drop.x - 30, drop.y - 46, 60, 60);
+          ctx.fillStyle = `rgba(255,226,122,${glow * 0.6})`;
+          ctx.fillRect(drop.x - 1.5, drop.y - 90, 3, 78);
+          ctx.restore();
+        }
+        drawItemIcon(ctx, it, drop.x - 12 + dxs, drop.y - 28 - lift + bob, 24);
+        const pl = world.player;
+        if (pl && Math.hypot(pl.x - drop.x, pl.y - drop.y) < 120 && age > 0.5) {
+          label(ctx, it.name, drop.x, drop.y - 34 + bob, drop.rare ? "#ffd86a" : "#f6f0e4");
+        }
       },
     });
   }
@@ -871,7 +1184,7 @@ export function renderFrame(canvas: HTMLCanvasElement, dt: number) {
       draw: () => {
         const moving = p.speedInstant > 8 && p.downFor <= 0 && p.feign <= 0;
         const frame = moving ? Math.floor(p.anim) % 4 : 1;
-        const bob = moving ? Math.abs(Math.sin(p.anim * Math.PI)) * 2.6 : Math.sin(world.time * 2.1) * 0.7;
+        const bob = moving ? Math.abs(Math.sin(p.anim * Math.PI)) * (2.2 + Math.min(1.6, p.speedInstant / 110)) : Math.sin(world.time * 2.1) * 0.7;
         const swingT = p.swing > 0 ? Math.sin((1 - p.swing / 0.18) * Math.PI) : 0;
         let ox = 0;
         let oy = -bob;
@@ -882,6 +1195,15 @@ export function renderFrame(canvas: HTMLCanvasElement, dt: number) {
         const down = p.downFor > 0;
         ctx.save();
         if (down || p.feign > 0) ctx.globalAlpha = down ? 0.5 : 0.72;
+        // squash & stretch: stretch up when a step lifts, squash when it lands, lean into the run
+        const stepK = moving ? Math.sin(p.anim * Math.PI * 2) : 0;
+        const sqx = 1 - stepK * 0.025 + swingT * 0.05;
+        const sqy = 1 + stepK * 0.035 - swingT * 0.04;
+        const lean = moving ? (p.dir === 1 ? -0.035 : p.dir === 2 ? 0.035 : 0) * Math.min(1, p.speedInstant / 120) : 0;
+        ctx.translate(p.x, p.y);
+        ctx.rotate(lean);
+        ctx.scale(sqx, sqy);
+        ctx.translate(-p.x, -p.y);
         drawActor(ctx, p.x, p.y, p.dir, frame, p.style, p.hair, p.trim, p.eq, p.sit || p.feign > 0 || down, p.flash, ox, oy, swingT);
         ctx.restore();
         if (down) return;
@@ -905,9 +1227,27 @@ export function renderFrame(canvas: HTMLCanvasElement, dt: number) {
   drawers.sort((a, b) => a.y - b.y);
   for (const d of drawers) d.draw();
 
+  if (world.clickMark) {
+    const cm = world.clickMark;
+    cm.t += dt;
+    if (cm.t > 0.7) world.clickMark = null;
+    else {
+      const k = cm.t / 0.7;
+      ctx.strokeStyle = `rgba(246,240,228,${0.9 * (1 - k)})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.ellipse(cm.x, cm.y, 6 + k * 16, (6 + k * 16) * 0.42, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = `rgba(228,177,90,${1 - k})`;
+      ctx.beginPath();
+      ctx.ellipse(cm.x, cm.y, 3, 1.4, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
   for (const f of world.floats) {
-    ctx.globalAlpha = Math.max(0, f.life);
-    ctx.font = "700 15px Outfit, sans-serif";
+    ctx.globalAlpha = Math.max(0, Math.min(1, f.life * 1.4));
+    const pop = f.big ? 1 + Math.max(0, 0.5 - (1.15 - f.life) * 3) : 1;
+    ctx.font = `700 ${(f.big ? 20 : 15) * pop}px Outfit, sans-serif`;
     ctx.textAlign = "center";
     ctx.lineWidth = 3;
     ctx.strokeStyle = "rgba(16,18,24,0.8)";
@@ -917,12 +1257,30 @@ export function renderFrame(canvas: HTMLCanvasElement, dt: number) {
     ctx.globalAlpha = 1;
   }
   for (const part of world.particles) {
-    ctx.globalAlpha = Math.max(0, part.life);
+    const life = Math.max(0, part.life);
+    ctx.globalAlpha = part.max ? Math.min(1, life / part.max) * (part.puff ? 0.55 : 1) : Math.min(1, life);
     ctx.fillStyle = part.color;
-    ctx.fillRect(part.x, part.y, 3, 3);
+    if (part.puff) {
+      const r = (part.size ?? 4) * (1 + (1 - life / (part.max ?? 1)) * 0.9);
+      ctx.beginPath();
+      ctx.arc(part.x, part.y, r, 0, Math.PI * 2);
+      ctx.fill();
+    } else ctx.fillRect(part.x, part.y, 3, 3);
   }
   ctx.globalAlpha = 1;
   ctx.restore();
+
+  if (map.tint) {
+    ctx.fillStyle = map.tint;
+    ctx.fillRect(0, 0, cssW, cssH);
+  }
+  if (map.vignette) {
+    const vg = ctx.createRadialGradient(cssW / 2, cssH / 2, Math.min(cssW, cssH) * 0.28, cssW / 2, cssH / 2, Math.max(cssW, cssH) * 0.72);
+    vg.addColorStop(0, "rgba(4,2,16,0)");
+    vg.addColorStop(1, `rgba(4,2,16,${map.vignette})`);
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, cssW, cssH);
+  }
 
   if (cssW >= 860) {
     const mw = 136;

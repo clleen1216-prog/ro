@@ -1,7 +1,11 @@
 import { sfxBow, sfxCast, sfxDown, sfxFoot, sfxHeal, sfxHit, sfxMiss, sfxPickup, sfxPortal, sfxSwing } from "@/game/audio";
 import { ITEMS, MONSTERS, SKILLS, TILE, getMap, isBlocked } from "@/game/content";
 import type { Dir, Monster, SkillId } from "@/game/types";
-import { burst, derive, enterMap, float, grantKill, openNpc, world } from "@/game/world";
+import { INV_CAP, burst, derive, dust, enterMap, float, grantKill, log, openNpc, world } from "@/game/world";
+
+function logPickup(name: string, rare?: boolean) {
+  log(rare ? `Rare drop! You picked up ${name}.` : `Picked up ${name}.`);
+}
 
 function held() {
   return world.qaKeys ?? world.keys;
@@ -193,7 +197,7 @@ function followPath(budget: number) {
     }
     const stepLen = Math.min(budget, len);
     const got = travel(dx, dy, stepLen);
-    if (got < 0.35) {
+    if (got < Math.min(0.35, stepLen * 0.3)) {
       world.path = [];
       world.repath = 0.28;
       break;
@@ -205,15 +209,27 @@ function followPath(budget: number) {
   return moved;
 }
 
+// Movement smoothing: the character eases into a run and slides to a stop
+// instead of snapping between standing and full speed.
+let gain = 0;
+let lastMx = 0;
+let lastMy = 1;
+let dustAcc = 0;
+
 function noteSteps(movedPx: number) {
   const p = world.player;
   if (!p) return;
   if (movedPx > 0.4) {
-    p.anim += movedPx / 28;
+    p.anim += movedPx / 26;
     world.foot += movedPx;
+    dustAcc += movedPx;
     if (world.foot > 54) {
       world.foot = 0;
       sfxFoot();
+    }
+    if (dustAcc > 34) {
+      dustAcc = 0;
+      dust(p.x + (Math.random() - 0.5) * 8, p.y - 1, getMap(world.mapId).ground[Math.floor(p.y / TILE) * getMap(world.mapId).cols + Math.floor(p.x / TILE)] ?? 0);
     }
   }
 }
@@ -244,13 +260,13 @@ export function basicAttack() {
   if (weapon?.weapon === "bow") sfxBow();
   else if (weapon?.weapon === "staff") sfxCast();
   else sfxSwing();
-  const hitChance = Math.max(0.25, Math.min(0.97, d.hit / (d.hit + 8 + MONSTERS[target.kind].level * 2)));
+  const hitChance = Math.max(0.25, Math.min(0.97, d.hit / (d.hit + 8 + MONSTERS[target.kind]!.level * 2)));
   if (Math.random() > hitChance) {
     float(target.x, target.y - 56, "Miss", "#b7ad9c");
     sfxMiss();
     return;
   }
-  let raw = d.atk - MONSTERS[target.kind].def * 0.55;
+  let raw = d.atk - MONSTERS[target.kind]!.def * 0.55;
   raw *= 0.9 + Math.random() * 0.2;
   let crit = false;
   if (Math.random() * 100 < d.crit) {
@@ -264,15 +280,28 @@ export function basicAttack() {
 }
 
 function hurtMonster(m: Monster, dmg: number, color: string) {
+  const st = MONSTERS[m.kind]!;
+  const p = world.player;
   m.hp -= dmg;
-  m.hurt = 0.18;
-  m.aggro = MONSTERS[m.kind].behavior !== "skittish";
+  m.hurt = 0.2;
+  m.aggro = st.behavior !== "skittish";
+  m.windup = 0;
   burst(m.x, m.y - 36, color);
-  float(m.x, m.y - 64, String(dmg), color);
+  const big = dmg >= st.hp * 0.25 || color === "#e4b15a";
+  float(m.x + (Math.random() - 0.5) * 14, m.y - 64, String(dmg), color, big);
+  if (p && !st.boss) {
+    const dx = m.x - p.x;
+    const dy = m.y - p.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const k = big ? 150 : 90;
+    m.kbx = (dx / len) * k;
+    m.kby = (dy / len) * k;
+  }
   if (m.hp <= 0) {
     m.alive = false;
-    m.deadUntil = 10;
-    grantKill(m.kind);
+    m.dyingT = 0.6;
+    m.deadUntil = st.respawn ?? 10;
+    grantKill(m.kind, m.x, m.y);
     world.targetId = world.targetId === m.id ? null : world.targetId;
   }
 }
@@ -335,20 +364,20 @@ export function castSkill(id: SkillId) {
       float(target.x, target.y - 56, "Miss", "#b7ad9c");
       sfxMiss();
     } else {
-      const raw = d.atk * (1.3 + 0.28 * lv) - MONSTERS[target.kind].def * 0.4;
+      const raw = d.atk * (1.3 + 0.28 * lv) - MONSTERS[target.kind]!.def * 0.4;
       hurtMonster(target, Math.max(1, Math.round(raw)), "#f6f0e4");
       sfxHit();
     }
   } else if (id === "spark" && target) {
     p.dir = face(target.x - p.x, target.y - p.y);
     for (let bolt = 0; bolt < lv && target.alive; bolt++) {
-      const raw = d.matk * (0.85 + Math.random() * 0.2) - MONSTERS[target.kind].mdef * 0.35;
+      const raw = d.matk * (0.85 + Math.random() * 0.2) - MONSTERS[target.kind]!.mdef * 0.35;
       hurtMonster(target, Math.max(1, Math.round(raw)), "#e07a4a");
     }
     sfxHit();
   } else if (id === "twin" && target) {
     p.dir = face(target.x - p.x, target.y - p.y);
-    const hit = Math.max(1, Math.round(d.atk * (0.9 + 0.24 * lv) - MONSTERS[target.kind].def * 0.28));
+    const hit = Math.max(1, Math.round(d.atk * (0.9 + 0.24 * lv) - MONSTERS[target.kind]!.def * 0.28));
     hurtMonster(target, hit, "#f6f0e4");
     if (target.alive) hurtMonster(target, hit, "#f6f0e4");
     sfxHit();
@@ -359,7 +388,7 @@ export function castSkill(id: SkillId) {
     for (const m of world.monsters) {
       if (!m.alive) continue;
       if (dist(p.x, p.y, m.x, m.y) > radius) continue;
-      const raw = d.atk * (1.15 + 0.22 * lv) - MONSTERS[m.kind].def * 0.35;
+      const raw = d.atk * (1.15 + 0.22 * lv) - MONSTERS[m.kind]!.def * 0.35;
       hurtMonster(m, Math.max(1, Math.round(raw)), "#e07a4a");
       const dx = m.x - p.x;
       const dy = m.y - p.y;
@@ -385,7 +414,7 @@ export function castSkill(id: SkillId) {
     for (const m of world.monsters) {
       if (!m.alive) continue;
       if (dist(origin.x, origin.y, m.x, m.y) <= radius) {
-        const raw = d.matk * (1.35 + 0.32 * lv) - MONSTERS[m.kind].mdef * 0.35;
+        const raw = d.matk * (1.35 + 0.32 * lv) - MONSTERS[m.kind]!.mdef * 0.35;
         hurtMonster(m, Math.max(1, Math.round(raw)), "#e07a4a");
         hits++;
       }
@@ -475,6 +504,20 @@ export function pointerDown(wx: number, wy: number) {
   world.targetId = null;
   world.pendingTalk = null;
   world.path = pathTo(wx, wy);
+  world.clickMark = { x: wx, y: wy, t: 0 };
+}
+
+let holdAt = 0;
+
+/** Holding the mouse on open ground keeps walking toward the cursor. */
+export function holdMove(wx: number, wy: number) {
+  const p = world.player;
+  if (!p || p.downFor > 0 || world.targetId || world.pendingTalk) return;
+  if (world.time - holdAt < 0.12) return;
+  holdAt = world.time;
+  p.sit = false;
+  world.path = pathTo(wx, wy);
+  world.clickMark = { x: wx, y: wy, t: 0.35 };
 }
 
 function hurtPlayer(amount: number) {
@@ -571,8 +614,25 @@ function updateMonsters(dt: number) {
   for (const m of world.monsters) {
     m.hurt = Math.max(0, m.hurt - dt);
     m.cd = Math.max(0, m.cd - dt);
+    m.lunge = Math.max(0, m.lunge - dt);
+    m.spawnT = Math.max(0, m.spawnT - dt);
     m.moving = false;
+    if (m.kbx || m.kby) {
+      const map = getMap(world.mapId);
+      const nx = m.x + m.kbx * dt;
+      const ny = m.y + m.kby * dt;
+      if (!isBlocked(map, nx, m.y)) m.x = nx;
+      if (!isBlocked(map, m.x, ny)) m.y = ny;
+      const decay = Math.exp(-11 * dt);
+      m.kbx *= decay;
+      m.kby *= decay;
+      if (Math.abs(m.kbx) + Math.abs(m.kby) < 4) {
+        m.kbx = 0;
+        m.kby = 0;
+      }
+    }
     if (!m.alive) {
+      m.dyingT = Math.max(0, m.dyingT - dt);
       m.deadUntil -= dt;
       if (m.deadUntil <= 0) {
         m.alive = true;
@@ -583,34 +643,55 @@ function updateMonsters(dt: number) {
         m.wanderX = m.homeX;
         m.wanderY = m.homeY;
         m.pause = 0.4 + Math.random();
+        m.spawnT = 0.5;
+        m.ease = 0;
+        m.windup = 0;
+        m.kbx = 0;
+        m.kby = 0;
       }
       continue;
     }
-    const st = MONSTERS[m.kind];
+    const st = MONSTERS[m.kind]!;
     const dd = dist(m.x, m.y, p.x, p.y);
     const home = dist(m.x, m.y, m.homeX, m.homeY);
     if (hidden) m.aggro = false;
     if (home > 320) m.aggro = false;
     if (!hidden && !m.aggro && st.behavior === "aggressive" && dd < st.aggro) m.aggro = true;
 
-    if (!hidden && m.aggro && st.behavior !== "skittish" && dd < 34 && p.downFor <= 0) {
+    const reach = st.boss ? 46 : 36;
+    if (!hidden && m.aggro && st.behavior !== "skittish" && dd < reach && p.downFor <= 0) {
       m.dir = face(p.x - m.x, p.y - m.y);
       m.moving = false;
+      m.ease = Math.max(0, m.ease - dt * 10);
       m.anim += dt * 5;
-      if (m.cd <= 0) {
-        m.cd = 1.15;
-        const d = derive(p);
-        const raw = st.atk - d.def * 0.55;
-        const chance = Math.max(0.3, Math.min(0.95, (50 + st.level * 4) / (50 + st.level * 4 + d.flee)));
-        if (Math.random() > chance) float(p.x, p.y - 48, "Miss", "#b7ad9c");
-        else hurtPlayer(raw);
+      // Wind up (rear back), then strike with a lunge. Getting hit cancels it.
+      if (m.windup > 0) {
+        m.windup -= dt;
+        if (m.windup <= 0) {
+          m.lunge = 0.2;
+          m.cd = st.boss ? 1.3 : 1.15;
+          if (dist(m.x, m.y, p.x, p.y) < reach + 14) {
+            const d = derive(p);
+            const raw = (st.atk - d.def * 0.55) * (0.88 + Math.random() * 0.24);
+            const chance = Math.max(0.3, Math.min(0.95, (50 + st.level * 4) / (50 + st.level * 4 + d.flee)));
+            if (Math.random() > chance) float(p.x, p.y - 48, "Miss", "#b7ad9c");
+            else hurtPlayer(raw);
+          }
+        }
+      } else if (m.cd <= 0) {
+        m.windup = 0.28;
       }
       continue;
     }
+    m.windup = 0;
 
     let tx = m.wanderX;
     let ty = m.wanderY;
     let speed = st.speed * 0.5;
+    if (st.speed <= 0) {
+      m.anim += dt * 1.2;
+      continue;
+    }
     if (!hidden && m.aggro && st.behavior !== "skittish") {
       tx = p.x;
       ty = p.y;
@@ -637,7 +718,7 @@ function updateMonsters(dt: number) {
         m.anim += dt * 1.6;
         if (m.pause > 0) continue;
         const ang = Math.random() * Math.PI * 2;
-        const rad = 22 + Math.random() * (m.kind === "thorn" ? 36 : 78);
+        const rad = 22 + Math.random() * (st.speed < 45 ? 36 : 78);
         m.wanderX = m.homeX + Math.cos(ang) * rad;
         m.wanderY = m.homeY + Math.sin(ang) * rad;
         m.pause = 0.8 + Math.random() * 1.8;
@@ -647,10 +728,14 @@ function updateMonsters(dt: number) {
       ty = m.wanderY;
       speed = st.speed * (st.behavior === "aggressive" ? 0.42 : 0.55);
     }
-    const moved = creep(m, tx, ty, speed * dt);
+    m.ease = Math.min(1, m.ease + dt * 6);
+    const moved = creep(m, tx, ty, speed * dt * (0.35 + 0.65 * m.ease));
     m.moving = moved > 0.4;
     if (m.moving) m.anim += dt * (m.kind === "hare" ? 7 : 4);
-    else m.anim += dt * 1.4;
+    else {
+      m.anim += dt * 1.4;
+      m.ease = Math.max(0, m.ease - dt * 8);
+    }
   }
   separateMonsters();
 }
@@ -660,18 +745,28 @@ function pickups() {
   if (!p) return;
   for (const drop of [...world.drops]) {
     if (drop.mapId !== world.mapId) continue;
-    if (dist(p.x, p.y, drop.x, drop.y) < 28) {
+    const age = world.time - (drop.born ?? -9);
+    if (age < 0.45) continue;
+    const dd = dist(p.x, p.y, drop.x, drop.y);
+    // Loot drifts toward the player once they are close, like a magnet.
+    if (dd < 70 && dd > 20) {
+      const k = 1 - dd / 70;
+      drop.x += ((p.x - drop.x) / dd) * 140 * k * 0.016;
+      drop.y += ((p.y - drop.y) / dd) * 140 * k * 0.016;
+    }
+    if (dd < 26) {
       const it = ITEMS[drop.itemId];
       if (!it) continue;
       if (it.stack) {
         const have = p.inv.find((s) => s.itemId === drop.itemId);
         if (have) have.qty += drop.qty;
-        else if (p.inv.length < 28) p.inv.push({ itemId: drop.itemId, qty: drop.qty });
+        else if (p.inv.length < INV_CAP) p.inv.push({ itemId: drop.itemId, qty: drop.qty });
         else continue;
-      } else if (p.inv.length < 28) p.inv.push({ itemId: drop.itemId, qty: drop.qty });
+      } else if (p.inv.length < INV_CAP) p.inv.push({ itemId: drop.itemId, qty: drop.qty });
       else continue;
       world.drops = world.drops.filter((d) => d.id !== drop.id);
-      float(drop.x, drop.y - 20, it.name, "#f6f0e4");
+      float(drop.x, drop.y - 20, drop.qty > 1 ? `${it.name} ×${drop.qty}` : it.name, drop.rare ? "#e4b15a" : "#f6f0e4");
+      logPickup(it.name, drop.rare);
       sfxPickup();
     }
   }
@@ -679,16 +774,25 @@ function pickups() {
 
 function decayWorld(dt: number) {
   for (const f of world.floats) {
-    f.y -= 26 * dt;
-    f.life -= dt;
+    f.y -= (f.big ? 34 : 26) * dt * (0.4 + f.life);
+    f.life -= dt * (f.big ? 0.8 : 1);
   }
   world.floats = world.floats.filter((f) => f.life > 0);
   for (const part of world.particles) {
     part.x += part.vx * dt;
     part.y += part.vy * dt;
+    if (part.grav) part.vy += part.grav * dt;
+    if (part.puff) {
+      part.vx *= 1 - 3 * dt;
+      part.vy *= 1 - 3 * dt;
+    }
     part.life -= dt;
   }
   world.particles = world.particles.filter((part) => part.life > 0);
+  for (const drop of world.drops) {
+    if (drop.ttl !== undefined) drop.ttl -= dt;
+  }
+  world.drops = world.drops.filter((drop) => drop.ttl === undefined || drop.ttl > 0);
 }
 
 export function step(dt: number) {
@@ -743,11 +847,29 @@ export function step(dt: number) {
     world.path = [];
     world.pendingTalk = null;
     const mag = Math.min(1, Math.hypot(mx, my));
-    movedPx = travel(mx, my, d.speed * dt * mag);
+    gain = Math.min(1, gain + dt * 8.5);
+    lastMx = mx;
+    lastMy = my;
+    movedPx = travel(mx, my, d.speed * dt * mag * (0.35 + 0.65 * gain));
   } else if (!p.sit && world.path.length) {
-    movedPx = followPath(d.speed * dt);
+    gain = Math.min(1, gain + dt * 8.5);
+    const left = world.path.reduce((acc, pt, i, arr) => acc + Math.hypot(pt.x - (i ? arr[i - 1]!.x : p.x), pt.y - (i ? arr[i - 1]!.y : p.y)), 0);
+    const arrive = Math.min(1, 0.45 + left / 70);
+    const before = { x: p.x, y: p.y };
+    movedPx = followPath(d.speed * dt * (0.35 + 0.65 * gain) * arrive);
+    if (movedPx > 0.1) {
+      lastMx = p.x - before.x;
+      lastMy = p.y - before.y;
+    }
+  } else if (gain > 0.02 && !p.sit) {
+    // coast to a stop
+    gain = Math.max(0, gain - dt * 13);
+    if (gain > 0.02) movedPx = travel(lastMx, lastMy, d.speed * dt * gain * 0.5);
+  } else {
+    gain = 0;
   }
-  p.speedInstant = dt > 0 ? movedPx / dt : 0;
+  const rawSpeed = dt > 0 ? movedPx / dt : 0;
+  p.speedInstant = rawSpeed;
   noteSteps(movedPx);
 
   const target = monsterById(world.targetId);

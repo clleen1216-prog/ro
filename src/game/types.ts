@@ -1,8 +1,8 @@
 export type Dir = 0 | 1 | 2 | 3;
-export type MapId = "ambercross" | "southmead";
+export type MapId = "ambercross" | "southmead" | "poring" | "woods" | "dunes" | "crypt";
 export type JobId = "novice" | "swordman" | "mage" | "archer";
 export type HairStyle = "bob" | "short" | "swept";
-export type MonsterKind = "dew" | "hare" | "wasp" | "thorn";
+export type MonsterKind = string;
 export type Behavior = "passive" | "skittish" | "aggressive";
 export type GearSlot =
   | "headUpper"
@@ -51,7 +51,18 @@ export type IconKind =
   | "jelly"
   | "fluff"
   | "wing"
-  | "wood";
+  | "wood"
+  | "apple"
+  | "herb"
+  | "bone"
+  | "claw"
+  | "plume"
+  | "gem"
+  | "card"
+  | "sting"
+  | "cloth"
+  | "wingfly"
+  | "mucus";
 export type WeaponKind = "dagger" | "sword" | "staff" | "bow";
 export type BuffStat = "atk" | "def" | "flee" | "hit";
 
@@ -125,6 +136,19 @@ export type Monster = {
   wanderY: number;
   pause: number;
   moving: boolean;
+  /** smoothed speed factor 0..1 so mobs ease into and out of motion */
+  ease: number;
+  /** seconds left in the death animation (monster is !alive while it plays) */
+  dyingT: number;
+  /** seconds left in the attack wind-up before the strike lands */
+  windup: number;
+  /** seconds left in the forward lunge after a strike */
+  lunge: number;
+  /** knockback velocity in px/s */
+  kbx: number;
+  kby: number;
+  /** pop-in timer after respawn */
+  spawnT: number;
 };
 
 export type Drop = {
@@ -134,10 +158,28 @@ export type Drop = {
   x: number;
   y: number;
   mapId: MapId;
+  /** world.time the drop appeared, for the pop animation */
+  born?: number;
+  /** horizontal scatter target offset */
+  dx?: number;
+  /** seconds until the drop vanishes */
+  ttl?: number;
+  rare?: boolean;
 };
 
-export type FloatText = { x: number; y: number; text: string; life: number; color: string };
-export type Particle = { x: number; y: number; vx: number; vy: number; life: number; color: string };
+export type FloatText = { x: number; y: number; text: string; life: number; color: string; big?: boolean };
+export type Particle = {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+  color: string;
+  size?: number;
+  grav?: number;
+  max?: number;
+  puff?: boolean;
+};
 
 export type Dialog = {
   speaker: string;

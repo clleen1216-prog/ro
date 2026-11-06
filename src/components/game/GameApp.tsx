@@ -14,12 +14,17 @@ import {
   STYLES,
   SUPPLY_STOCK,
   TRIMS,
+  MAX_BASE,
+  MAX_JOB,
+  MONSTERS,
   expNeed,
   getMap,
   itemStats,
+  jobExpNeed,
+  sellPrice,
 } from "@/game/content";
 import { drawItemIcon, drawPreview, renderFrame } from "@/game/draw";
-import { castSkill, installProbe, pickAt, pointerDown, step } from "@/game/sim";
+import { castSkill, holdMove, installProbe, pickAt, pointerDown, step } from "@/game/sim";
 import type { GearSlot, HotSlot, Player, SkillId } from "@/game/types";
 import {
   addStat,
@@ -45,6 +50,7 @@ import {
   unequip,
   useStack,
   world,
+  INV_CAP,
 } from "@/game/world";
 
 function typingTarget(target: EventTarget | null) {
@@ -182,7 +188,7 @@ export function GameApp() {
         world.time += dt;
         if (world.screen === "play") step(dt);
         if (started.current) {
-          const kind = world.screen === "play" && world.mapId === "southmead" ? "field" : "town";
+          const kind = world.screen === "play" && world.mapId !== "ambercross" ? "field" : "town";
           setTrack(kind);
           tick();
         }
@@ -274,6 +280,7 @@ export function GameApp() {
           onPointerMove={(e) => {
             if (!canvasRef.current || world.screen !== "play") return;
             const rect = canvasRef.current.getBoundingClientRect();
+            if (e.buttons & 1) holdMove(e.clientX - rect.left + world.cam.x, e.clientY - rect.top + world.cam.y);
             const hit = pickAt(e.clientX - rect.left + world.cam.x, e.clientY - rect.top + world.cam.y);
             canvasRef.current.style.cursor = hit ? "pointer" : "default";
           }}
@@ -415,7 +422,10 @@ export function GameApp() {
           <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-3">
             <div className="pointer-events-auto min-w-0 max-w-[46%] rounded-md bg-surface/90 px-3 py-2 sm:max-w-sm">
               <p className="truncate font-display text-xl leading-none text-gold">{map.name}</p>
-              <p className="truncate text-xs text-muted">{map.subtitle}</p>
+              <p className="truncate text-xs text-muted">
+                {map.subtitle}
+                {map.levels ? ` · ${map.levels}` : ""}
+              </p>
               <p className="truncate text-xs text-muted">
                 {trackTitle(map.music)} · Base {player.baseLevel} {JOBS[player.job].name} {player.jobLevel}
               </p>
@@ -449,18 +459,27 @@ export function GameApp() {
             </div>
           </div>
 
+          <TargetCard />
+
           <div className="pointer-events-none absolute top-40 right-3 left-3 flex flex-col gap-1 sm:top-auto sm:bottom-28 sm:left-3 sm:max-w-xs">
             <Meter label="HP" value={player.hp} max={derive(player).maxHp} bar="bg-hp" track="bg-hp-deep" />
             <Meter label="SP" value={player.sp} max={derive(player).maxSp} bar="bg-sp" track="bg-sp-deep" />
             <Meter
-              label="EXP"
-              value={player.baseExp}
-              max={expNeed(player.baseLevel)}
+              label={`Base Lv ${player.baseLevel}${player.baseLevel >= MAX_BASE ? " (max)" : ""}`}
+              value={player.baseLevel >= MAX_BASE ? 1 : player.baseExp}
+              max={player.baseLevel >= MAX_BASE ? 1 : expNeed(player.baseLevel)}
               bar="bg-exp"
               track="bg-surface-2"
             />
+            <Meter
+              label={`Job Lv ${player.jobLevel}${player.jobLevel >= MAX_JOB ? " (max)" : ""}`}
+              value={player.jobLevel >= MAX_JOB ? 1 : player.jobExp}
+              max={player.jobLevel >= MAX_JOB ? 1 : jobExpNeed(player.jobLevel)}
+              bar="bg-sp"
+              track="bg-surface-2"
+            />
             <div className="flex justify-between text-xs text-muted">
-              <span>{player.marks} marks</span>
+              <span>{player.marks.toLocaleString()} z</span>
               <span>
                 {player.quest === "active" ? `Dewdrops ${player.questCount}/6` : player.quest === "done" ? "Return to Maela" : ""}
               </span>
@@ -595,6 +614,39 @@ function IconBtn({ label, onClick, children }: { label: string; onClick: () => v
     >
       <span className="size-5">{children}</span>
     </button>
+  );
+}
+
+function TargetCard() {
+  const p = world.player;
+  const m = world.monsters.find((x) => x.id === world.targetId && x.alive);
+  if (!p || !m) return null;
+  const st = MONSTERS[m.kind];
+  if (!st) return null;
+  const gap = st.level - p.baseLevel;
+  const tone = gap >= 6 ? "text-hp" : gap >= 2 ? "text-gold" : "text-muted";
+  return (
+    <div className="pointer-events-none absolute top-16 left-1/2 w-60 -translate-x-1/2 rounded-md bg-surface/90 px-3 py-2 sm:top-3">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="truncate font-display text-lg leading-none text-fg">{st.name}</span>
+        <span className={`text-xs ${tone}`}>Lv {st.level}</span>
+      </div>
+      <p className="text-[10px] text-muted">{st.tag}</p>
+      <div className="bar bg-hp-deep mt-1">
+        <div className="h-full bg-hp" style={{ width: `${Math.max(0, (m.hp / m.maxHp) * 100)}%` }} />
+      </div>
+      <div className="mt-1 flex justify-between text-[10px] text-muted">
+        <span>
+          {Math.ceil(m.hp)}/{m.maxHp} HP
+        </span>
+        <span>
+          {st.exp} / {st.jexp} EXP
+        </span>
+      </div>
+      <p className="mt-1 truncate text-[10px] text-muted">
+        Drops: {st.drops.filter((d) => d.rate >= 1 && ITEMS[d.id]).slice(0, 4).map((d) => `${ITEMS[d.id]!.name} ${d.rate}%`).join(", ")}
+      </p>
+    </div>
   );
 }
 
@@ -761,13 +813,13 @@ function BagWindow() {
   const p = world.player;
   if (!p) return null;
   return (
-    <Window title="Bag" onClose={() => togglePanel("inv")}>
+    <Window title={`Bag ${p.inv.length}/${INV_CAP}`} onClose={() => togglePanel("inv")}>
       <div className="grid grid-cols-4 gap-2">
         {p.inv.map((stack, i) => {
           const item = ITEMS[stack.itemId];
           if (!item) return null;
           return (
-            <button key={`${stack.itemId}-${i}`} type="button" className="rounded-md border border-line p-1 text-left" onClick={() => equipFromInventory(i)}>
+            <button key={`${stack.itemId}-${i}`} type="button" title={`${item.name}: ${item.desc} ${itemStats(item)} · sells for ${sellPrice(item)}z`} className="rounded-md border border-line p-1 text-left" onClick={() => equipFromInventory(i)}>
               <Icon id={item.id} />
               <span className="block truncate text-[10px]">
                 {item.name}
@@ -777,7 +829,7 @@ function BagWindow() {
           );
         })}
       </div>
-      {p.inv.length === 0 && <p className="text-sm text-muted">Empty. The south fields drop jelly, fluff, and the odd hat.</p>}
+      {p.inv.length === 0 && <p className="text-sm text-muted">Empty. Defeat monsters and walk over their drops to collect them.</p>}
       <p className="mt-2 text-xs text-muted">Click gear to equip, a salve to drink. Right-click a hotbar slot to clear it.</p>
       <div className="mt-2 flex flex-wrap gap-1">
         {p.inv
@@ -839,7 +891,9 @@ function HelpWindow() {
         <li>Click a creature to fight. Click a person to talk. Space attacks your target.</li>
         <li>E opens equipment. Ten slots: upper, mid, and lower head, armor, weapon, shield, garment, shoes, and two accessories.</li>
         <li>Hair style, color, and trim can be changed any time in that window.</li>
-        <li>The south gate of Ambercross leads to Southmead. Maela’s stall is west of that road.</li>
+        <li>Ambercross gates: south to Southmead (then Willow Woods), east to Poring Fields (then Culvert Crypt), west to Sograt Dunes.</li>
+        <li>Defeated monsters drop items on the ground. Walk over them to pick them up. Rare drops glow gold. Sell loot to Maela's supply stall for zeny.</li>
+        <li>Hold the mouse on the ground to keep walking. Fly Wing teleports on this map; Butterfly Wing returns to Ambercross.</li>
         <li>Seren witnesses a job at base level 4 and job level 4. Wanderers keep First Aid and Play Dead. R rests. 1–9 use the hotbar.</li>
         <li>Ambercross Day plays on the plaza. Southmead has its own tune. Both are original.</li>
       </ul>
@@ -860,8 +914,8 @@ function ShopWindow() {
         bump();
       }}
     >
-      <p className="text-xs text-muted">{p.marks} marks</p>
-      <ul className="mt-2 flex max-h-52 flex-col gap-1 overflow-auto">
+      <p className="text-xs text-muted">{p.marks.toLocaleString()} zeny</p>
+      <ul className="mt-2 flex max-h-72 flex-col gap-1 overflow-auto">
         {stock.map((id) => {
           const item = ITEMS[id];
           if (!item) return null;
@@ -881,7 +935,7 @@ function ShopWindow() {
         })}
       </ul>
       <p className="mt-3 text-sm">Sell</p>
-      <ul className="mt-1 flex flex-col gap-1">
+      <ul className="mt-1 flex max-h-48 flex-col gap-1 overflow-auto">
         {p.inv.map((stack, i) => {
           const item = ITEMS[stack.itemId];
           if (!item) return null;
@@ -892,7 +946,7 @@ function ShopWindow() {
                 {stack.qty > 1 ? ` ×${stack.qty}` : ""}
               </span>
               <button type="button" className="rounded-md border border-line px-2 py-1 text-xs" onClick={() => trySell(i)}>
-                {Math.max(1, Math.floor(item.price * 0.45))}
+                {sellPrice(item)}
               </button>
             </li>
           );
