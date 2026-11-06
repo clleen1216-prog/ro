@@ -1,5 +1,5 @@
 export type Dir = 0 | 1 | 2 | 3;
-export type MapId = "ambercross" | "southmead" | "poring" | "woods" | "dunes" | "crypt";
+export type MapId = "ambercross" | "southmead" | "poring" | "woods" | "dunes" | "crypt" | "orc";
 export type JobId = "novice" | "swordman" | "mage" | "archer";
 export type HairStyle = "bob" | "short" | "swept";
 export type MonsterKind = string;
@@ -25,7 +25,11 @@ export type SkillId =
   | "spark"
   | "ember"
   | "twin"
-  | "focus";
+  | "focus"
+  | "crush"
+  | "frost"
+  | "storm"
+  | "shower";
 export type HatKind = "cap" | "circlet" | "brim" | "feather" | "glasses" | "mask" | "scarf" | "ribbon";
 export type IconKind =
   | "cap"

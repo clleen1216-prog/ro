@@ -367,7 +367,7 @@ export function continueGame() {
     data.player.job = legacy[savedJob] ?? (savedJob === "novice" || savedJob === "swordman" || savedJob === "mage" || savedJob === "archer" ? savedJob : "novice");
     data.player.hotbar = data.player.hotbar.map((slot) => (slot && slot.kind === "skill" && !(slot.id in SKILLS) ? null : slot));
     world.player = data.player;
-    world.mapId = (["ambercross", "southmead", "poring", "woods", "dunes", "crypt"] as MapId[]).includes(data.mapId) ? data.mapId : "ambercross";
+    world.mapId = (["ambercross", "southmead", "poring", "woods", "dunes", "crypt", "orc"] as MapId[]).includes(data.mapId) ? data.mapId : "ambercross";
     world.monsters = spawnMonsters(world.mapId);
     world.drops = [];
     world.path = [];

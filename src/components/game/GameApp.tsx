@@ -680,6 +680,10 @@ function HotFace({ slot }: { slot: HotSlot }) {
       ember: "Ball",
       twin: "Strafe",
       focus: "Focus",
+      crush: "Bowling",
+      frost: "Cold",
+      storm: "Storm",
+      shower: "Shower",
     };
     return <span className="px-0.5 text-center leading-tight">{sk ? (short[slot.id] ?? sk.name) : slot.id}</span>;
   }

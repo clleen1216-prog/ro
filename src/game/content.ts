@@ -714,6 +714,42 @@ export const SKILLS: Record<SkillId, SkillDef> = {
     blurb: "Two arrows in one draw. Each hit grows with rank.",
     target: "enemy",
   },
+  crush: {
+    id: "crush",
+    name: "Bowling Bash",
+    job: "swordman",
+    sp: 16,
+    max: 5,
+    blurb: "A crushing blow that sends the target flying into its friends. Splash damage nearby.",
+    target: "enemy",
+  },
+  frost: {
+    id: "frost",
+    name: "Cold Bolt",
+    job: "mage",
+    sp: 12,
+    max: 5,
+    blurb: "One ice bolt per rank. Chilled targets are too stiff to attack for a moment.",
+    target: "enemy",
+  },
+  storm: {
+    id: "storm",
+    name: "Thunderstorm",
+    job: "mage",
+    sp: 28,
+    max: 5,
+    blurb: "Lightning rains on a wide area, striking several times. Costs a lot of SP.",
+    target: "area",
+  },
+  shower: {
+    id: "shower",
+    name: "Arrow Shower",
+    job: "archer",
+    sp: 15,
+    max: 5,
+    blurb: "A volley that lands on your target and everything beside it, pushing them back.",
+    target: "area",
+  },
   focus: {
     id: "focus",
     name: "Improve Concentration",
@@ -733,18 +769,18 @@ export const JOBS: Record<JobId, { name: string; blurb: string; skills: SkillId[
   },
   swordman: {
     name: "Swordman",
-    blurb: "Swords and shields. Bash, Magnum Break, and Endure.",
-    skills: ["arcCut", "ringCut", "guard"],
+    blurb: "Swords and shields. Bash, Magnum Break, Bowling Bash, and Endure.",
+    skills: ["arcCut", "ringCut", "crush", "guard"],
   },
   mage: {
     name: "Mage",
-    blurb: "Rods and staves. Fire Bolt, then Fire Ball.",
-    skills: ["spark", "ember"],
+    blurb: "Rods and staves. Fire Bolt, Cold Bolt, Fire Ball, and Thunderstorm.",
+    skills: ["spark", "frost", "ember", "storm"],
   },
   archer: {
     name: "Archer",
-    blurb: "Bows. Double Strafe, and Improve Concentration.",
-    skills: ["twin", "focus"],
+    blurb: "Bows. Double Strafe, Arrow Shower, and Improve Concentration.",
+    skills: ["twin", "shower", "focus"],
   },
 };
 
@@ -1338,7 +1374,7 @@ function buildField(backX: number, backY: number): MapDef {
 type Gate = { side: "N" | "S" | "E" | "W"; at: number; len: number; to: MapId; tx: number; ty: number; label: string };
 type Patch = { tile: number; x: number; y: number; w: number; h: number; solid?: boolean };
 type Group = { kind: MonsterKind; x: number; y: number; n: number; r: number };
-type Theme = "meadow" | "woods" | "dunes" | "crypt";
+type Theme = "meadow" | "woods" | "dunes" | "crypt" | "orc";
 
 type WildOpts = {
   id: MapId;
@@ -1418,6 +1454,7 @@ function buildWild(o: WildOpts): MapDef {
     woods: [["tree", 0.2], ["flower", 0.03], ["rock", 0.01]],
     dunes: [["cactus", 0.03], ["rock", 0.03], ["bones", 0.008]],
     crypt: [["tomb", 0.03], ["pillar", 0.014], ["bones", 0.03], ["torch", 0.006]],
+    orc: [["tree", 0.045], ["rock", 0.025], ["bones", 0.012], ["torch", 0.01]],
   };
   for (let y = 1; y < rows - 1; y++) {
     for (let x = 1; x < cols - 1; x++) {
@@ -1435,7 +1472,7 @@ function buildWild(o: WildOpts): MapDef {
       }
     }
   }
-  const edgeKind: Record<Theme, Prop["kind"]> = { meadow: "tree", woods: "tree", dunes: "cactus", crypt: "pillar" };
+  const edgeKind: Record<Theme, Prop["kind"]> = { meadow: "tree", woods: "tree", dunes: "cactus", crypt: "pillar", orc: "tree" };
   for (let x = 0; x < cols; x += 2) {
     if (!isGate(x, 0)) props.push({ kind: edgeKind[o.theme], x: (x + 0.5) * T, y: 0.8 * T });
     if (!isGate(x, rows - 1)) props.push({ kind: edgeKind[o.theme], x: (x + 0.5) * T, y: (rows - 0.2) * T });
@@ -1613,7 +1650,10 @@ const crypt = buildWild({
     { tile: 3, x: 15, y: 5, w: 6, h: 4, solid: true },
     { tile: 6, x: 22, y: 20, w: 8, h: 6 },
   ],
-  gates: [{ side: "W", at: 14, len: 3, to: "poring", tx: 37.4 * T0, ty: 15.6 * T0, label: "Poring Fields" }],
+  gates: [
+    { side: "W", at: 14, len: 3, to: "poring", tx: 37.4 * T0, ty: 15.6 * T0, label: "Poring Fields" },
+    { side: "E", at: 14, len: 3, to: "orc", tx: 2.6 * T0, ty: 15.6 * T0, label: "Orc Village" },
+  ],
   groups: [
     { kind: "familiar", x: 9, y: 8, n: 6, r: 5 },
     { kind: "familiar", x: 11, y: 24, n: 5, r: 4 },
@@ -1628,7 +1668,40 @@ const crypt = buildWild({
   vignette: 0.55,
 });
 
-const MAPS: Record<MapId, MapDef> = { ambercross: city, southmead: field, poring, woods, dunes, crypt };
+const orc = buildWild({
+  id: "orc",
+  name: "Orc Village",
+  subtitle: "A burnt-out camp beyond the crypt",
+  levels: "Lv 17 – 38",
+  cols: 44,
+  rows: 34,
+  base: 2,
+  lane: 2,
+  seed: 419,
+  theme: "orc",
+  start: { x: 3.4, y: 15.6 },
+  patches: [
+    { tile: 6, x: 8, y: 2, w: 12, h: 8 },
+    { tile: 6, x: 28, y: 22, w: 12, h: 9 },
+    { tile: 3, x: 22, y: 4, w: 7, h: 5, solid: true },
+    { tile: 5, x: 30, y: 10, w: 10, h: 7 },
+  ],
+  gates: [{ side: "W", at: 14, len: 3, to: "crypt", tx: 33.2 * T0, ty: 15.6 * T0, label: "Culvert Crypt" }],
+  groups: [
+    { kind: "goblin", x: 12, y: 8, n: 8, r: 6 },
+    { kind: "goblin", x: 10, y: 26, n: 6, r: 5 },
+    { kind: "orc-zombie", x: 20, y: 12, n: 7, r: 5 },
+    { kind: "orc-warrior", x: 22, y: 24, n: 8, r: 6 },
+    { kind: "orc-warrior", x: 35, y: 6, n: 5, r: 4 },
+    { kind: "orc-skeleton", x: 18, y: 20, n: 6, r: 4 },
+    { kind: "orc-skeleton", x: 36, y: 25, n: 6, r: 4 },
+    { kind: "orc-hero", x: 36, y: 13, n: 1, r: 0 },
+  ],
+  tint: "rgba(150,60,20,0.10)",
+  vignette: 0.3,
+});
+
+const MAPS: Record<MapId, MapDef> = { ambercross: city, southmead: field, poring, woods, dunes, crypt, orc };
 
 export function getMap(id: MapId) {
   return MAPS[id];

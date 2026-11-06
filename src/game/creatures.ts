@@ -56,6 +56,112 @@ function blob(c: Ctx, t: number, m: number, body: string, hi: string, back: bool
   c.restore();
 }
 
+
+type OrcStyle = { skin: string; armor: string; cloth: string; weapon: "axe" | "club" | "none"; boss?: boolean; bone?: boolean; rot?: boolean };
+
+function orcBody(c: Ctx, t: number, m: number, back: boolean, o: OrcStyle) {
+  const k = Math.sin(t * (m ? 8 : 2));
+  const skin = o.skin;
+  limb(c, -8, -30, -10 + k * 4, -2, 8, o.cloth);
+  limb(c, 9, -30, 11 - k * 4, -2, 8, o.cloth);
+  // torso
+  c.beginPath();
+  c.moveTo(-20, -34);
+  c.quadraticCurveTo(-24, -62, -12, -70);
+  c.lineTo(12, -70);
+  c.quadraticCurveTo(24, -62, 20, -34);
+  c.closePath();
+  c.fillStyle = o.bone ? "#efe9d8" : skin;
+  c.fill();
+  c.lineWidth = 2;
+  c.strokeStyle = INK;
+  c.stroke();
+  if (o.bone) {
+    for (let i = 0; i < 3; i++) {
+      c.beginPath();
+      c.moveTo(-14, -42 - i * 8);
+      c.lineTo(14, -42 - i * 8);
+      c.lineWidth = 2.4;
+      c.strokeStyle = "#a89c80";
+      c.stroke();
+    }
+  } else {
+    c.fillStyle = o.armor;
+    c.fillRect(-18, -58, 36, 14);
+    c.strokeRect(-18, -58, 36, 14);
+    c.fillStyle = o.cloth;
+    c.fillRect(-16, -38, 32, 8);
+  }
+  // weapon arm
+  const sw = o.weapon === "none" ? 0 : -k * 0.25;
+  limb(c, 16, -62, 30, -46 + k * 3, 8, o.bone ? "#efe9d8" : skin);
+  limb(c, -16, -62, -28, -46 - k * 3, 8, o.bone ? "#efe9d8" : skin);
+  if (o.weapon !== "none") {
+    c.save();
+    c.translate(32, -46 + k * 3);
+    c.rotate(-0.5 + sw);
+    limb(c, 0, 6, 0, -34, 4, "#6b442c");
+    if (o.weapon === "axe") {
+      c.beginPath();
+      c.moveTo(0, -34);
+      c.quadraticCurveTo(18, -40, 14, -20);
+      c.lineTo(0, -22);
+      c.closePath();
+      c.fillStyle = "#b9c0cc";
+      c.fill();
+      c.lineWidth = 2;
+      c.strokeStyle = INK;
+      c.stroke();
+    } else ell(c, 0, -36, 6, 8, "#8a5a32");
+    c.restore();
+  }
+  // head
+  ell(c, 0, -80, 14, 13, o.bone ? "#f6f0e0" : skin);
+  if (o.boss || o.armor) {
+    c.fillStyle = o.armor;
+    c.beginPath();
+    c.arc(0, -84, 14, Math.PI, 0);
+    c.closePath();
+    c.fill();
+    c.lineWidth = 2;
+    c.strokeStyle = INK;
+    c.stroke();
+    if (o.boss) {
+      for (let i = -1; i <= 1; i++) {
+        c.beginPath();
+        c.moveTo(i * 8 - 3, -96);
+        c.lineTo(i * 8, -108 - (i === 0 ? 4 : 0));
+        c.lineTo(i * 8 + 3, -96);
+        c.fillStyle = "#e4b15a";
+        c.fill();
+        c.stroke();
+      }
+    }
+  }
+  if (!back) {
+    eye(c, -5.5, -80, 2.4, false);
+    eye(c, 5.5, -80, 2.4, false);
+    if (!o.rot) ell(c, -5.5, -80, 1, 1, "#e04a3a", false);
+    // tusks
+    c.fillStyle = "#f6f0e0";
+    c.beginPath();
+    c.moveTo(-6, -73);
+    c.lineTo(-4, -66);
+    c.lineTo(-2, -73);
+    c.moveTo(6, -73);
+    c.lineTo(4, -66);
+    c.lineTo(2, -73);
+    c.fill();
+    c.lineWidth = 1.2;
+    c.stroke();
+  }
+  if (o.rot) {
+    c.fillStyle = "#b8a88a";
+    c.fillRect(-18, -50, 8, 16);
+    c.fillRect(8, -66, 10, 6);
+  }
+}
+
 const LOOKS: Record<string, (c: Ctx, t: number, m: number, back: boolean) => void> = {
   poring: (c, t, m, back) => blob(c, t, m, "#f6a6c0", "#ffd9e6", back),
   drops: (c, t, m, back) => blob(c, t, m, "#f0a13a", "#ffd69a", back),
@@ -406,6 +512,53 @@ const LOOKS: Record<string, (c: Ctx, t: number, m: number, back: boolean) => voi
     ell(c, 38, -30, 1.4, 1.4, "#e04a3a", false);
     limb(c, 40, -38, 50, -52 + k * 2, 2.4, "#9a6a1a");
     limb(c, 34, -40, 36, -56 - k * 2, 2.4, "#9a6a1a");
+  },
+  goblin: (c, t, m, back) => {
+    const k = Math.sin(t * (m ? 12 : 2.5));
+    limb(c, -5, -22, -7 + k * 4, -2, 5, "#5a8a3a");
+    limb(c, 6, -22, 8 - k * 4, -2, 5, "#5a8a3a");
+    ell(c, 0, -34, 14, 16, "#7aa84a");
+    c.fillStyle = "#8a5a32";
+    c.fillRect(-13, -32, 26, 8);
+    limb(c, 12, -40, 24, -34 + k * 3, 4, "#7aa84a");
+    c.save();
+    c.translate(26, -34 + k * 3);
+    c.rotate(-0.6 - k * 0.2);
+    limb(c, 0, 4, 0, -22, 4, "#6b442c");
+    ell(c, 0, -24, 5, 7, "#8a5a32");
+    c.restore();
+    limb(c, -12, -42, -20, -32, 4, "#7aa84a");
+    ell(c, 0, -52, 13, 12, "#86b656");
+    c.beginPath();
+    c.moveTo(-12, -54);
+    c.lineTo(-26, -60 - Math.abs(k) * 3);
+    c.lineTo(-11, -48);
+    c.moveTo(12, -54);
+    c.lineTo(26, -60 - Math.abs(k) * 3);
+    c.lineTo(11, -48);
+    c.fillStyle = "#86b656";
+    c.fill();
+    c.lineWidth = 2;
+    c.strokeStyle = INK;
+    c.stroke();
+    if (!back) {
+      eye(c, -4.5, -53, 2.4, false);
+      eye(c, 4.5, -53, 2.4, false);
+      ell(c, -4.5, -53, 1, 1, "#e0c43a", false);
+      ell(c, 4.5, -53, 1, 1, "#e0c43a", false);
+      c.fillStyle = INK;
+      c.fillRect(-4, -46, 8, 2);
+    }
+  },
+  orc: (c, t, m, back) => orcBody(c, t, m, back, { skin: "#6e9a3e", armor: "#8a8f9a", cloth: "#6b442c", weapon: "axe" }),
+  orczombie: (c, t, m, back) => orcBody(c, t, m, back, { skin: "#7a8a62", armor: "#5a5a50", cloth: "#4a4a3a", weapon: "club", rot: true }),
+  orcskeleton: (c, t, m, back) => orcBody(c, t, m, back, { skin: "#efe9d8", armor: "#7a5a3a", cloth: "#6a6a62", weapon: "axe", bone: true, rot: true }),
+  orchero: (c, t, m, back) => {
+    c.save();
+    c.shadowColor = "#e4b15a";
+    c.shadowBlur = 10 + Math.sin(t * 3) * 3;
+    orcBody(c, t, m, back, { skin: "#5f8a34", armor: "#c9a54a", cloth: "#7a2a22", weapon: "axe", boss: true });
+    c.restore();
   },
 };
 

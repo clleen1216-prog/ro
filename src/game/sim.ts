@@ -381,6 +381,88 @@ export function castSkill(id: SkillId) {
     hurtMonster(target, hit, "#f6f0e4");
     if (target.alive) hurtMonster(target, hit, "#f6f0e4");
     sfxHit();
+  } else if (id === "crush" && target) {
+    p.dir = face(target.x - p.x, target.y - p.y);
+    const hitChance = Math.min(0.98, 0.6 + lv * 0.07 + d.hit / 400);
+    if (Math.random() > hitChance) {
+      float(target.x, target.y - 56, "Miss", "#b7ad9c");
+      sfxMiss();
+    } else {
+      const map = getMap(world.mapId);
+      const dirX = target.x - p.x;
+      const dirY = target.y - p.y;
+      const len = Math.hypot(dirX, dirY) || 1;
+      const raw = d.atk * (1.6 + 0.3 * lv) - MONSTERS[target.kind]!.def * 0.4;
+      const ox = target.x;
+      const oy = target.y;
+      hurtMonster(target, Math.max(1, Math.round(raw)), "#e4b15a");
+      for (const m of world.monsters) {
+        if (!m.alive || m.id === target.id) continue;
+        if (dist(ox, oy, m.x, m.y) > 70 + lv * 6) continue;
+        const sp = Math.max(1, Math.round(raw * 0.55));
+        hurtMonster(m, sp, "#f6f0e4");
+        const nx = m.x + (dirX / len) * 30;
+        const ny = m.y + (dirY / len) * 30;
+        if (!isBlocked(map, nx, m.y)) m.x = nx;
+        if (!isBlocked(map, m.x, ny)) m.y = ny;
+      }
+      world.shake = Math.min(7, world.shake + 3);
+      sfxHit();
+    }
+  } else if (id === "frost" && target) {
+    p.dir = face(target.x - p.x, target.y - p.y);
+    for (let bolt = 0; bolt < lv && target.alive; bolt++) {
+      const raw = d.matk * (0.85 + Math.random() * 0.2) - MONSTERS[target.kind]!.mdef * 0.35;
+      hurtMonster(target, Math.max(1, Math.round(raw)), "#8fd0f0");
+    }
+    if (target.alive) {
+      target.cd = Math.max(target.cd, 1.1 + lv * 0.15);
+      target.windup = 0;
+      target.ease = 0;
+      burst(target.x, target.y - 30, "#c8ecff");
+    }
+    sfxHit();
+  } else if (id === "storm") {
+    const origin = target ?? p;
+    const radius = 100 + lv * 8;
+    let hits = 0;
+    for (const m of world.monsters) {
+      if (!m.alive || dist(origin.x, origin.y, m.x, m.y) > radius) continue;
+      for (let strike = 0; strike < 2 + Math.ceil(lv / 2) && m.alive; strike++) {
+        const raw = d.matk * (0.7 + 0.12 * lv) - MONSTERS[m.kind]!.mdef * 0.3;
+        hurtMonster(m, Math.max(1, Math.round(raw * (0.85 + Math.random() * 0.3))), "#f2e46a");
+      }
+      hits++;
+    }
+    if (hits === 0) {
+      p.sp += cost;
+      float(p.x, p.y - 40, "No one there", "#b7ad9c");
+    } else {
+      world.shake = Math.min(8, world.shake + 4);
+      sfxHit();
+    }
+  } else if (id === "shower") {
+    const origin = target ?? p;
+    const radius = 90 + lv * 8;
+    const map = getMap(world.mapId);
+    let hits = 0;
+    for (const m of world.monsters) {
+      if (!m.alive || dist(origin.x, origin.y, m.x, m.y) > radius) continue;
+      const raw = d.atk * (1.0 + 0.22 * lv) - MONSTERS[m.kind]!.def * 0.3;
+      hurtMonster(m, Math.max(1, Math.round(raw)), "#f6f0e4");
+      const dx = m.x - origin.x;
+      const dy = m.y - origin.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const nx = m.x + (dx / len) * 22;
+      const ny = m.y + (dy / len) * 22;
+      if (!isBlocked(map, nx, m.y)) m.x = nx;
+      if (!isBlocked(map, m.x, ny)) m.y = ny;
+      hits++;
+    }
+    if (hits === 0) {
+      p.sp += cost;
+      float(p.x, p.y - 40, "No one there", "#b7ad9c");
+    } else sfxBow();
   } else if (id === "ringCut") {
     const map = getMap(world.mapId);
     const radius = 72 + lv * 6;

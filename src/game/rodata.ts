@@ -100,6 +100,11 @@ const ITEM_LIST: ItemDef[] = [
   etc("decayed-nail", "Decayed Nail", "claw", "#7a6a4a", 34, "A blackened old nail."),
   etc("skel-bone", "Skel-Bone", "bone", "#e9e2cf", 34, "A knuckle of old skeleton."),
   etc("gold-nugget", "Gold", "gem", "#e4b15a", 700, "A solid gold chunk. Sells very well."),
+  etc("orc-tusk", "Orc Tusk", "bone", "#efe6d2", 110, "A chipped tusk from an orc."),
+  etc("iron-ore", "Iron Ore", "gem", "#8a8f9a", 90, "A heavy lump of ore."),
+  etc("oridecon", "Oridecon", "gem", "#7ec8e8", 820, "A rare blue-white ore smiths prize."),
+  etc("orcish-voucher", "Orcish Voucher", "cloth", "#c8a86a", 95, "A scrap carrying an orc's mark."),
+  etc("goblin-ear", "Goblin Ear", "claw", "#7aa04a", 40, "A pointy green ear."),
   // Existing Southmead loot (amber-jelly, fluff, wing, heartwood) lives in content.ts.
 
   // ── Weapons ────────────────────────────────────────────────────
@@ -140,6 +145,18 @@ const ITEM_LIST: ItemDef[] = [
   gear("helm", "Helm", "headUpper", "cap", "#b7c0cc", 6000, "A steel helm.", { def: 9, hat: "cap", jobs: ["novice", "swordman"] }),
   gear("ribbon", "Ribbon", "headUpper", "ribbon", "#d4687a", 800, "A big red bow. Slightly mind-sharpening.", { def: 1, mdef: 3, int: 1, hat: "ribbon" }),
   gear("sunglasses", "Sunglasses", "headMid", "glasses", "#2a2a32", 1000, "Dark lenses.", { def: 1, hat: "glasses" }),
+
+  // ── High tier ──────────────────────────────────────────────────
+  gear("claymore", "Claymore", "weapon", "sword", "#e7ecf4", 9000, "A great hand-and-a-half sword.", { atk: 52, str: 2, weapon: "sword", range: 58, jobs: ["swordman"] }),
+  gear("staff-of-soul", "Staff of Soul", "weapon", "staff", "#c27ae0", 8200, "A staff humming with borrowed spirit.", { atk: 4, matk: 48, int: 3, weapon: "staff", range: 172, jobs: ["mage"] }),
+  gear("crossbow", "Crossbow", "weapon", "bow", "#6a4a2a", 7600, "Slow to draw, brutal to take.", { atk: 46, dex: 3, weapon: "bow", range: 210, jobs: ["archer"] }),
+  gear("full-plate", "Full Plate", "armor", "armor", "#c9d2de", 21000, "Heavy steel from collar to knee.", { def: 34, vit: 2, jobs: ["swordman"] }),
+  gear("saint-robe", "Saint Robe", "armor", "armor", "#f2efe4", 14000, "Blessed cloth that turns spells.", { def: 15, mdef: 26, int: 2, jobs: ["mage", "novice"] }),
+  gear("ranger-coat", "Ranger Coat", "armor", "armor", "#4e7a3e", 12500, "Supple hide cut for moving fast.", { def: 20, agi: 2, dex: 1, jobs: ["archer", "novice", "swordman"] }),
+  gear("greaves", "Greaves", "shoes", "boots", "#9aa0aa", 6200, "Steel shin guards over thick boots.", { def: 10, vit: 1 }),
+  gear("orc-helm", "Orc Helm", "headUpper", "cap", "#6a7a3a", 12000, "A spiked helm taken from an orc warrior.", { def: 13, str: 1, hat: "cap", jobs: ["novice", "swordman", "archer"] }),
+  gear("earring", "Earring", "acc", "ring", "#e4b15a", 4500, "A gold hoop that sharpens the mind.", { int: 2, mdef: 3 }),
+  gear("orc-bracer", "Orcish Bracer", "acc", "ring", "#8a5a32", 7000, "Studded leather. Adds real muscle.", { str: 2, def: 3 }),
 
   // ── Accessories ────────────────────────────────────────────────
   gear("clip", "Clip", "acc", "ring", "#c9ccd1", 800, "A small metal clip.", { def: 1, mdef: 1 }),
@@ -302,6 +319,50 @@ export const MONSTER_DEFS: Record<string, MonsterDef> = {
       { id: "rosary", rate: 0.3 }, { id: "poporing-card", rate: 0.12 },
     ],
   },
+  goblin: {
+    name: "Goblin", level: 17, hp: 380, atk: 40, def: 10, mdef: 4, exp: 150, jexp: 96,
+    behavior: "aggressive", speed: 92, aggro: 170, draw: 76, look: "goblin", zeny: [28, 60], tag: "Demi-Human · Wind 1",
+    drops: [
+      { id: "goblin-ear", rate: 60 }, { id: "iron-ore", rate: 10 }, { id: "orange-potion", rate: 4 },
+      { id: "yellow-potion", rate: 1.5 }, { id: "greaves", rate: 0.3 }, { id: "goblin-card", rate: 0.12 },
+    ],
+  },
+  "orc-zombie": {
+    name: "Orc Zombie", level: 22, hp: 650, atk: 56, def: 14, mdef: 4, exp: 270, jexp: 170,
+    behavior: "aggressive", speed: 42, aggro: 150, draw: 96, look: "orczombie", zeny: [40, 85], tag: "Undead · Undead 1",
+    drops: [
+      { id: "orcish-voucher", rate: 60 }, { id: "rotten-bandage", rate: 25 }, { id: "yellow-potion", rate: 3 },
+      { id: "saint-robe", rate: 0.3 }, { id: "orc-zombie-card", rate: 0.12 },
+    ],
+  },
+  "orc-warrior": {
+    name: "Orc Warrior", level: 24, hp: 820, atk: 64, def: 20, mdef: 5, exp: 340, jexp: 215,
+    behavior: "aggressive", speed: 70, aggro: 180, draw: 104, look: "orc", zeny: [50, 100], tag: "Demi-Human · Earth 1",
+    drops: [
+      { id: "orc-tusk", rate: 55 }, { id: "iron-ore", rate: 22 }, { id: "yellow-potion", rate: 5 },
+      { id: "white-potion", rate: 1.2 }, { id: "oridecon", rate: 2 }, { id: "orc-helm", rate: 0.4 },
+      { id: "claymore", rate: 0.25 }, { id: "orc-warrior-card", rate: 0.12 },
+    ],
+  },
+  "orc-skeleton": {
+    name: "Orc Skeleton", level: 28, hp: 900, atk: 70, def: 22, mdef: 6, exp: 420, jexp: 270,
+    behavior: "aggressive", speed: 66, aggro: 180, draw: 104, look: "orcskeleton", zeny: [60, 120], tag: "Undead · Undead 1",
+    drops: [
+      { id: "orc-tusk", rate: 45 }, { id: "skel-bone", rate: 40 }, { id: "yellow-potion", rate: 5 },
+      { id: "white-potion", rate: 1.5 }, { id: "oridecon", rate: 2.5 }, { id: "orc-bracer", rate: 0.3 },
+      { id: "crossbow", rate: 0.25 }, { id: "orc-skeleton-card", rate: 0.12 },
+    ],
+  },
+  "orc-hero": {
+    name: "Orc Hero", level: 36, hp: 7200, atk: 100, def: 32, mdef: 18, exp: 5200, jexp: 3200,
+    behavior: "aggressive", speed: 76, aggro: 210, draw: 150, look: "orchero", boss: true, respawn: 150, zeny: [900, 1500], tag: "Boss · Demi-Human · Earth 2",
+    drops: [
+      { id: "orc-tusk", rate: 100 }, { id: "oridecon", rate: 60 }, { id: "white-potion", rate: 40 },
+      { id: "blue-potion", rate: 30 }, { id: "claymore", rate: 8 }, { id: "staff-of-soul", rate: 8 },
+      { id: "crossbow", rate: 8 }, { id: "full-plate", rate: 5 }, { id: "ranger-coat", rate: 5 },
+      { id: "earring", rate: 6 }, { id: "orc-hero-card", rate: 2 },
+    ],
+  },
   "golden-bug": {
     name: "Golden Thief Bug", level: 24, hp: 2600, atk: 52, def: 18, mdef: 20, exp: 1500, jexp: 900,
     behavior: "aggressive", speed: 84, aggro: 200, draw: 108, look: "goldbug", boss: true, respawn: 90, zeny: [400, 700], tag: "Boss · Insect · Fire 1",
@@ -320,11 +381,11 @@ for (const [id, def] of Object.entries(MONSTER_DEFS)) {
 
 export const SHOP_WEAPONS = [
   "knife", "cutter", "main-gauche", "sword", "blade", "slayer",
-  "rod", "wand", "arc-wand", "bow", "composite-bow", "great-bow",
+  "rod", "wand", "arc-wand", "bow", "composite-bow", "great-bow", "claymore", "staff-of-soul", "crossbow",
 ];
 export const SHOP_ARMOR = [
   "jacket", "padded-armor", "chain-mail", "silk-robe", "hood", "muffler", "manteau",
-  "sandals", "shoes", "boots", "guard", "shield",
+  "sandals", "shoes", "boots", "greaves", "guard", "shield", "full-plate", "saint-robe", "ranger-coat", "earring",
   "hat", "cap", "helm", "ribbon", "sunglasses", "clip", "glove", "rosary",
 ];
 export const SHOP_TOOLS = [
