@@ -74,6 +74,7 @@ export const world = {
   draft: { name: "Alder", hair: "auburn", style: "bob" as Player["style"], trim: "brass" },
   viewW: 800,
   viewH: 600,
+  zoom: 1,
   dpr: 1,
   hover: "",
   /** click-to-move marker */
@@ -577,8 +578,8 @@ export function useStack(index: number) {
     }
     world.path = [];
     world.targetId = null;
-    world.cam.x = p.x - world.viewW / 2;
-    world.cam.y = p.y - world.viewH / 2;
+    world.cam.x = p.x - world.viewW / world.zoom / 2;
+    world.cam.y = p.y - world.viewH / world.zoom / 2;
     log("You vanish and reappear elsewhere.");
     p.itemCd = 0.6;
     stack.qty -= 1;

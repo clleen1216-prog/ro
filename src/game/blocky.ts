@@ -8,7 +8,7 @@
 export const PX = 3;
 
 /** Texel size for moving entities (people and monsters); larger than world texels. */
-export let EPX = 5;
+export let EPX = 3;
 export function setEntityPx(n: number) {
   EPX = n;
 }

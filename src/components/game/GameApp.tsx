@@ -278,13 +278,13 @@ export function GameApp() {
             wake();
             if (world.screen !== "play" || !canvasRef.current) return;
             const rect = canvasRef.current.getBoundingClientRect();
-            pointerDown(e.clientX - rect.left + world.cam.x, e.clientY - rect.top + world.cam.y);
+            pointerDown((e.clientX - rect.left) / world.zoom + world.cam.x, (e.clientY - rect.top) / world.zoom + world.cam.y);
           }}
           onPointerMove={(e) => {
             if (!canvasRef.current || world.screen !== "play") return;
             const rect = canvasRef.current.getBoundingClientRect();
-            if (e.buttons & 1) holdMove(e.clientX - rect.left + world.cam.x, e.clientY - rect.top + world.cam.y);
-            const hit = pickAt(e.clientX - rect.left + world.cam.x, e.clientY - rect.top + world.cam.y);
+            if (e.buttons & 1) holdMove((e.clientX - rect.left) / world.zoom + world.cam.x, (e.clientY - rect.top) / world.zoom + world.cam.y);
+            const hit = pickAt((e.clientX - rect.left) / world.zoom + world.cam.x, (e.clientY - rect.top) / world.zoom + world.cam.y);
             canvasRef.current.style.cursor = hit ? "pointer" : "default";
           }}
           onContextMenu={(e) => e.preventDefault()}

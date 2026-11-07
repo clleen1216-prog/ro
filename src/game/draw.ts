@@ -562,8 +562,11 @@ export function renderFrame(canvas: HTMLCanvasElement, dt: number) {
       /* font optional */
     }
   }
-  setEntityPx(Math.max(4, Math.min(7, Math.round(cssH / 120))));
-  updateCam(dt, cssW, cssH);
+  const Z = Math.max(3, Math.min(6, Math.round(cssH / 150))) / 3;
+  world.zoom = Z;
+  const vw = cssW / Z;
+  const vh = cssH / Z;
+  updateCam(dt, vw, vh);
   const dpr = world.dpr;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, cssW, cssH);
@@ -574,6 +577,8 @@ export function renderFrame(canvas: HTMLCanvasElement, dt: number) {
   const shakeY = (Math.random() - 0.5) * world.shake;
   world.shake = Math.max(0, world.shake - dt * 14);
   ctx.save();
+  ctx.scale(Z, Z);
+  ctx.imageSmoothingEnabled = false;
   ctx.translate(-world.cam.x + shakeX, -world.cam.y + shakeY);
 
   const layer = bakedGround(map);
@@ -581,8 +586,8 @@ export function renderFrame(canvas: HTMLCanvasElement, dt: number) {
   if (world.debug) {
     const x0 = Math.max(0, Math.floor(world.cam.x / TILE) - 1);
     const y0 = Math.max(0, Math.floor(world.cam.y / TILE) - 1);
-    const x1 = Math.min(map.cols, Math.ceil((world.cam.x + cssW) / TILE) + 1);
-    const y1 = Math.min(map.rows, Math.ceil((world.cam.y + cssH) / TILE) + 1);
+    const x1 = Math.min(map.cols, Math.ceil((world.cam.x + vw) / TILE) + 1);
+    const y1 = Math.min(map.rows, Math.ceil((world.cam.y + vh) / TILE) + 1);
     for (let ty = y0; ty < y1; ty++) {
       for (let tx = x0; tx < x1; tx++) {
         if (!map.block[ty * map.cols + tx]) continue;
@@ -593,9 +598,9 @@ export function renderFrame(canvas: HTMLCanvasElement, dt: number) {
   }
 
   const viewL = world.cam.x - 140;
-  const viewR = world.cam.x + cssW + 140;
+  const viewR = world.cam.x + vw + 140;
   const viewT = world.cam.y - 260;
-  const viewB = world.cam.y + cssH + 80;
+  const viewB = world.cam.y + vh + 80;
   const drawers: { y: number; draw: () => void }[] = [];
   for (const prop of map.props) {
     if (prop.x < viewL || prop.x > viewR || prop.y < viewT || prop.y > viewB) continue;
@@ -948,5 +953,8 @@ export function drawPreview(canvas: HTMLCanvasElement, p: Pick<Player, "style" |
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, w, h);
   const moving = (p.speedInstant ?? 0) > 8;
+  const prevPx = EPX;
+  setEntityPx(5);
   drawActor(ctx, w / 2, h - 18, p.dir, (p.anim ?? 0) * (Math.PI / 2), moving ? 1 : 0, p.style, p.hair, p.trim, p.eq, false, 0, 0, 0, -1);
+  setEntityPx(prevPx);
 }
