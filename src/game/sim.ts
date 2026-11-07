@@ -255,7 +255,7 @@ export function basicAttack() {
   p.feign = 0;
   p.dir = face(target.x - p.x, target.y - p.y);
   p.attackCd = d.aspd;
-  p.swing = 0.18;
+  p.swing = 0.34;
   const weapon = p.eq.weapon ? ITEMS[p.eq.weapon] : undefined;
   if (weapon?.weapon === "bow") sfxBow();
   else if (weapon?.weapon === "staff") sfxCast();
@@ -339,7 +339,7 @@ export function castSkill(id: SkillId) {
   p.sit = false;
   p.feign = 0;
   p.attackCd = Math.max(p.attackCd, d.aspd * 0.75);
-  p.swing = 0.16;
+  p.swing = 0.34;
   sfxCast();
   const target = monsterById(world.targetId);
   if (id === "firstAid") healSelf(8 + p.baseLevel * 3);

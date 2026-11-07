@@ -255,3 +255,54 @@ export function blitScratch(ctx: Ctx, flash = 0) {
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(scratchCv, -(SCR_W / 2) * PX, -(SCR_H - 4) * PX, SCR_W * PX, SCR_H * PX);
 }
+
+// ── Cast shadows (light from the upper left, falling to the lower right) ──
+
+const silCache = new WeakMap<HTMLCanvasElement, HTMLCanvasElement>();
+
+function silhouette(cv: HTMLCanvasElement): HTMLCanvasElement {
+  let s = silCache.get(cv);
+  if (!s) {
+    s = mk(cv.width, cv.height);
+    const c = s.getContext("2d")!;
+    c.drawImage(cv, 0, 0);
+    c.globalCompositeOperation = "source-in";
+    c.fillStyle = "#06100a";
+    c.fillRect(0, 0, cv.width, cv.height);
+    silCache.set(cv, s);
+  }
+  return s;
+}
+
+/** Project a bottom-centre sprite onto the ground as a skewed, flattened shadow. */
+export function castShadow(ctx: Ctx, cv: HTMLCanvasElement, x: number, y: number, alpha = 0.26, len = 0.32) {
+  const cx = Math.floor(cv.width / 2);
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.imageSmoothingEnabled = false;
+  ctx.transform(1, 0, -0.55, -len, Math.round(x), Math.round(y));
+  ctx.drawImage(silhouette(cv), -cx * PX, -cv.height * PX, cv.width * PX, cv.height * PX);
+  ctx.restore();
+}
+
+let shCv: HTMLCanvasElement | null = null;
+
+/** Same, for whatever is currently in the scratch buffer (origin at the current transform). */
+export function castShadowScratch(ctx: Ctx, alpha = 0.26, len = 0.32) {
+  if (!scratchCv) return;
+  if (!shCv) shCv = mk(SCR_W, SCR_H);
+  const c = shCv.getContext("2d")!;
+  c.setTransform(1, 0, 0, 1, 0, 0);
+  c.globalCompositeOperation = "source-over";
+  c.clearRect(0, 0, SCR_W, SCR_H);
+  c.drawImage(scratchCv, 0, 0);
+  c.globalCompositeOperation = "source-in";
+  c.fillStyle = "#06100a";
+  c.fillRect(0, 0, SCR_W, SCR_H);
+  ctx.save();
+  ctx.globalAlpha = alpha * ctx.globalAlpha;
+  ctx.imageSmoothingEnabled = false;
+  ctx.transform(1, 0, -0.55, -len, 0, 0);
+  ctx.drawImage(shCv, -(SCR_W / 2) * PX, -(SCR_H - 4) * PX, SCR_W * PX, SCR_H * PX);
+  ctx.restore();
+}

@@ -1,5 +1,5 @@
 import { buildingSprite, drawBlockActor, propSprite, type ActorParts } from "@/game/blockart";
-import { B, PX, blit, hash, mk, tileTexture } from "@/game/blocky";
+import { B, PX, blit, castShadow, hash, mk, tileTexture } from "@/game/blocky";
 import { drawCreature, hasLook } from "@/game/creatures";
 import { ITEMS, MONSTERS, TILE, getMap, hairHex, trimHex, type ItemDef } from "@/game/content";
 import type { Dir, GearSlot, IconKind, Player } from "@/game/types";
@@ -73,7 +73,8 @@ function drawActor(
   x: number,
   y: number,
   dir: Dir,
-  frame: number,
+  phase: number,
+  amt: number,
   style: Player["style"],
   hair: string,
   trim: string,
@@ -82,13 +83,13 @@ function drawActor(
   flash: number,
   ox = 0,
   oy = 0,
-  swing = 0,
+  atk = -1,
   parts?: ActorParts,
 ) {
-  shadow(ctx, x, y, 16);
+  shadow(ctx, x, y, 10);
   ctx.save();
   ctx.translate(Math.round(x + ox), Math.round(y + oy));
-  drawBlockActor(ctx, dir, frame, style, hairHex(hair), trimHex(trim), parts ?? partsFromEq(eq), sit, flash, swing);
+  drawBlockActor(ctx, dir, phase, amt, style, hairHex(hair), trimHex(trim), parts ?? partsFromEq(eq), sit, flash, atk, world.time);
   ctx.restore();
 }
 
@@ -463,6 +464,24 @@ function bakedGround(map: ReturnType<typeof getMap>) {
       g.drawImage(tileTexture(tile, v), tx * TILE, ty * TILE, TILE, TILE);
     }
   }
+  // 2.5D relief: land stands above water, so show its south cliff face
+  const faces = ["#8a6a42", "#72552f", "#5c4425", "#46321b"];
+  for (let ty = 0; ty < map.rows - 1; ty++) {
+    for (let tx = 0; tx < map.cols; tx++) {
+      const here = map.ground[ty * map.cols + tx] ?? 0;
+      const below = map.ground[(ty + 1) * map.cols + tx] ?? 0;
+      if (here !== 3 && below === 3) {
+        for (let r = 0; r < 4; r++) {
+          for (let i = 0; i < 16; i++) {
+            g.fillStyle = hash(tx * 16 + i, r, 11) > 0.8 ? faces[Math.min(3, r + 1)]! : faces[r]!;
+            g.fillRect(tx * TILE + i * PX, (ty + 1) * TILE + r * PX, PX, PX);
+          }
+        }
+        g.fillStyle = "rgba(0,20,60,0.28)";
+        g.fillRect(tx * TILE, (ty + 1) * TILE + 4 * PX, TILE, PX * 2);
+      }
+    }
+  }
   groundCanvas = c;
   groundKey = key;
   return c;
@@ -556,6 +575,7 @@ export function renderFrame(canvas: HTMLCanvasElement, dt: number) {
             ctx.fillStyle = "rgba(244,199,90,0.14)";
             ctx.fillRect(prop.x - 21, prop.y - 81, 42, 42);
           }
+          if (k !== "flower" && k !== "bones" && k !== "sign") castShadow(ctx, sp, prop.x, prop.y, k === "tree" ? 0.3 : 0.24, k === "tree" ? 0.4 : 0.3);
           blit(ctx, sp, prop.x, prop.y);
           if (k === "fountain") {
             for (let i = 0; i < 5; i++) {
@@ -587,7 +607,9 @@ export function renderFrame(canvas: HTMLCanvasElement, dt: number) {
           }
         } else {
           shadow(ctx, prop.x, prop.y, (prop.w ?? 120) * 0.4);
-          blit(ctx, buildingSprite(k, prop.w ?? 120, prop.h ?? 100, prop.hue), prop.x, prop.y);
+          const bs = buildingSprite(k, prop.w ?? 120, prop.h ?? 100, prop.hue);
+          castShadow(ctx, bs, prop.x, prop.y, 0.22, 0.28);
+          blit(ctx, bs, prop.x, prop.y);
         }
       },
     });
@@ -619,7 +641,7 @@ export function renderFrame(canvas: HTMLCanvasElement, dt: number) {
           mid: nh === "glasses" || nh === "mask" ? { hat: nh, tint: "#2a2118" } : undefined,
           lower: nh === "scarf" || nh === "ribbon" ? { hat: nh, tint: hatTint } : undefined,
         };
-        drawActor(ctx, npc.x, npc.y, 0, 1, npc.style, npc.hair, npc.trim, eq, false, 0, 0, -Math.round(bob), 0, nparts);
+        drawActor(ctx, npc.x, npc.y, 0, 0, 0, npc.style, npc.hair, npc.trim, eq, false, 0, 0, -Math.round(bob), -1, nparts);
         label(ctx, npc.name, npc.x, npc.y - 112, "#f6f0e4");
         const p = world.player;
         const bang =
@@ -754,19 +776,13 @@ export function renderFrame(canvas: HTMLCanvasElement, dt: number) {
       y: p.y,
       draw: () => {
         const moving = p.speedInstant > 8 && p.downFor <= 0 && p.feign <= 0;
-        const frame = moving ? Math.floor(p.anim) % 4 : 1;
-        const bob = moving ? Math.abs(Math.sin(p.anim * Math.PI)) * (2.2 + Math.min(1.6, p.speedInstant / 110)) : Math.sin(world.time * 2.1) * 0.7;
-        const swingT = p.swing > 0 ? Math.sin((1 - p.swing / 0.18) * Math.PI) : 0;
-        let ox = 0;
-        let oy = -bob;
-        if (p.dir === 0) oy += swingT * 6;
-        else if (p.dir === 3) oy -= swingT * 7;
-        else if (p.dir === 1) ox -= swingT * 8;
-        else ox += swingT * 8;
+        const amt = moving ? Math.min(1, p.speedInstant / 70) : 0;
+        const phase = p.anim * (Math.PI / 2);
+        const atk = p.swing > 0 ? 1 - p.swing / 0.34 : -1;
         const down = p.downFor > 0;
         ctx.save();
         if (down || p.feign > 0) ctx.globalAlpha = down ? 0.5 : 0.72;
-        drawActor(ctx, p.x, p.y, p.dir, frame, p.style, p.hair, p.trim, p.eq, p.sit || p.feign > 0 || down, p.flash, Math.round(ox), Math.round(oy), swingT);
+        drawActor(ctx, p.x, p.y, p.dir, phase, amt, p.style, p.hair, p.trim, p.eq, p.sit || p.feign > 0 || down, p.flash, 0, 0, atk);
         ctx.restore();
         if (down) return;
         label(ctx, p.name, p.x, p.y - 112, "#fff6df");
@@ -829,6 +845,13 @@ export function renderFrame(canvas: HTMLCanvasElement, dt: number) {
   ctx.globalAlpha = 1;
   ctx.restore();
 
+  const hz = ctx.createLinearGradient(0, 0, 0, cssH);
+  hz.addColorStop(0, "rgba(190,215,255,0.1)");
+  hz.addColorStop(0.5, "rgba(190,215,255,0)");
+  hz.addColorStop(1, "rgba(0,0,10,0.14)");
+  ctx.fillStyle = hz;
+  ctx.fillRect(0, 0, cssW, cssH);
+
   if (map.tint) {
     ctx.fillStyle = map.tint;
     ctx.fillRect(0, 0, cssW, cssH);
@@ -882,6 +905,5 @@ export function drawPreview(canvas: HTMLCanvasElement, p: Pick<Player, "style" |
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, w, h);
   const moving = (p.speedInstant ?? 0) > 8;
-  const frame = moving ? Math.floor(p.anim ?? 0) % 4 : 1;
-  drawActor(ctx, w / 2, h - 18, p.dir, frame, p.style, p.hair, p.trim, p.eq, false, 0, 0, moving ? -Math.abs(Math.sin((p.anim ?? 0) * Math.PI)) * 2 : 0, 0);
+  drawActor(ctx, w / 2, h - 18, p.dir, (p.anim ?? 0) * (Math.PI / 2), moving ? 1 : 0, p.style, p.hair, p.trim, p.eq, false, 0, 0, 0, -1);
 }

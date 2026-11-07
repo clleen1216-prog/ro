@@ -3,7 +3,7 @@
 // is ~22 texels tall) with its feet at (0,0), facing right in side view.
 // `f` scales the design to the monster's draw size.
 
-import { B, blitScratch, scratch, shade } from "@/game/blocky";
+import { B, blitScratch, castShadowScratch, scratch, shade } from "@/game/blocky";
 
 type Ctx = CanvasRenderingContext2D;
 type View = "f" | "s" | "b";
@@ -400,5 +400,6 @@ export function drawCreature(ctx: Ctx, look: string, t: number, moving: boolean,
   const f = Math.max(0.7, size / 66);
   if (dir === 1) c.scale(-1, 1);
   fn({ c, f, t, m: moving ? 1 : 0, v: dir === 3 ? "b" : dir === 0 ? "f" : "s" });
+  castShadowScratch(ctx);
   blitScratch(ctx, flash);
 }
