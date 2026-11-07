@@ -896,23 +896,27 @@ const BASE_MONSTERS: Record<
   },
 };
 
-const LEGACY: Record<string, Pick<MonsterDef, "zeny" | "tag" | "drops">> = {
+const LEGACY: Record<string, Pick<MonsterDef, "zeny" | "tag" | "drops" | "look">> = {
   dew: {
+    look: "dew",
     zeny: [6, 15],
     tag: "Water · Neutral 1",
     drops: [{ id: "amber-jelly", rate: 75 }, { id: "salve", rate: 12 }, { id: "sun-cap", rate: 4.5 }],
   },
   hare: {
+    look: "hare",
     zeny: [10, 24],
     tag: "Brute · Neutral 1",
     drops: [{ id: "fluff", rate: 70 }, { id: "carrot", rate: 6 }, { id: "spectacles", rate: 4 }],
   },
   wasp: {
+    look: "wasp",
     zeny: [14, 30],
     tag: "Insect · Wind 1",
     drops: [{ id: "wing", rate: 68 }, { id: "ether", rate: 14 }, { id: "clip-wind", rate: 4 }],
   },
   thorn: {
+    look: "thorn",
     zeny: [18, 38],
     tag: "Plant · Earth 1",
     drops: [{ id: "heartwood", rate: 65 }, { id: "green-herb", rate: 8 }, { id: "laurel", rate: 5 }],

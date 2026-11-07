@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,560;9..144,680&family=Outfit:wght@400;500;600&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 
 @theme {
@@ -19,9 +19,9 @@
   --color-parchment: #f3e6c8;
   --color-parchment-edge: #c4b089;
   --color-ink: #2a2118;
-  --font-display: "Fraunces", Georgia, serif;
-  --font-sans: "Outfit", system-ui, sans-serif;
-  --radius-panel: 0.45rem;
+  --font-display: "Pixelify Sans", "Courier New", monospace;
+  --font-sans: "Pixelify Sans", "Courier New", monospace;
+  --radius-panel: 0;
 }
 
 @layer base {
@@ -45,6 +45,20 @@
     opacity: 0.45;
   }
 
+  * {
+    border-radius: 0 !important;
+  }
+
+  button:not(:disabled):active {
+    transform: translateY(2px);
+  }
+
+  button {
+    box-shadow:
+      inset 2px 2px 0 rgb(255 255 255 / 0.2),
+      inset -2px -2px 0 rgb(0 0 0 / 0.35);
+  }
+
   #root,
   body > div {
     height: 100%;
@@ -53,26 +67,33 @@
 
 @layer components {
   .panel {
-    border: 1px solid var(--color-line);
+    border: 3px solid #101014;
     background: color-mix(in srgb, var(--color-surface) 94%, black);
     color: var(--color-fg);
-    border-radius: var(--radius-panel);
-    box-shadow: 0 16px 40px rgb(0 0 0 / 0.35);
+    border-radius: 0;
+    box-shadow:
+      inset 3px 3px 0 rgb(255 255 255 / 0.16),
+      inset -3px -3px 0 rgb(0 0 0 / 0.4),
+      0 10px 0 rgb(0 0 0 / 0.25);
   }
 
   .parchment {
     background: var(--color-parchment);
     color: var(--color-ink);
-    border: 1px solid var(--color-parchment-edge);
-    border-radius: var(--radius-panel);
-    box-shadow: 0 18px 40px rgb(0 0 0 / 0.4);
+    border: 3px solid #3a2a16;
+    border-radius: 0;
+    box-shadow:
+      inset 3px 3px 0 rgb(255 255 255 / 0.45),
+      inset -3px -3px 0 rgb(120 90 40 / 0.35),
+      0 10px 0 rgb(0 0 0 / 0.25);
   }
 
   .bar {
     height: 0.7rem;
     overflow: hidden;
-    border-radius: 999px;
-    background: rgb(0 0 0 / 0.35);
+    border-radius: 0;
+    border: 2px solid #101014;
+    background: rgb(0 0 0 / 0.5);
   }
 
   .touch-only {
