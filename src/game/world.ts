@@ -1,4 +1,5 @@
 import { sfxCoin, sfxEquip, sfxHeal, sfxLevel } from "@/game/audio";
+import { WEAPON_TYPES, gearScore, isRareOrBetter } from "@/game/gear";
 import {
   BASE_STAT,
   ITEMS,
@@ -28,6 +29,7 @@ import type {
   Particle,
   Player,
   SkillId,
+  WeaponKind,
 } from "@/game/types";
 
 const KEY = "ambercross-save-v1";
@@ -51,7 +53,7 @@ export const world = {
   dialog: null as Dialog | null,
   shop: null as null | "smith" | "outfit" | "supply",
   storageOpen: false,
-  panels: { status: false, equip: false, inv: false, skills: false, help: false, nav: false },
+  panels: { status: false, equip: false, inv: false, skills: false, help: false, nav: false, auto: false },
   keys: new Set<string>(),
   qaKeys: null as Set<string> | null,
   touch: { x: 0, y: 0, attack: false },
@@ -80,7 +82,9 @@ export const world = {
   /** click-to-move marker */
   clickMark: null as null | { x: number; y: number; t: number },
   /** auto-battle / auto-navigation */
-  auto: { battle: false, travel: null as MapId | null, skillT: 0, pathT: 0, note: "" },
+  swingMax: 0.4,
+  shots: [] as { kind: string; x: number; y: number; tx: number; ty: number; t: number; dur: number; color: string }[],
+  auto: { battle: false, travel: null as MapId | null, skillT: 0, pathT: 0, note: "", equipT: 0, skills: {} as Partial<Record<SkillId, boolean>>, autoEquip: true },
 };
 
 let rev = 0;
@@ -143,6 +147,7 @@ export function derive(p: Player) {
   let dex = 0;
   let luk = 0;
   let range = 42;
+  let wKind: WeaponKind | null = null;
   for (const slot of Object.keys(p.eq) as GearSlot[]) {
     const id = p.eq[slot];
     if (!id) continue;
@@ -159,7 +164,12 @@ export function derive(p: Player) {
     dex += it.dex ?? 0;
     luk += it.luk ?? 0;
     if (it.range) range = it.range;
+    if (slot === "weapon" && it.weapon) {
+      wKind = it.weapon;
+      if (!it.range) range = WEAPON_TYPES[it.weapon].range;
+    }
   }
+  const wt = wKind ? WEAPON_TYPES[wKind] : null;
   if (p.job === "mage") range = Math.max(range, 156);
   if (p.job === "archer") range += 28;
   const now = world.time;
@@ -189,14 +199,15 @@ export function derive(p: Player) {
     luk: L,
     maxHp: 48 + p.baseLevel * 12 + V * 8,
     maxSp: 20 + p.baseLevel * 4 + I * 5,
-    atk: 5 + S * 2 + p.baseLevel + atk + bAtk,
-    matk: 3 + I * 2 + matk,
+    atk: Math.round((5 + S * 2 + p.baseLevel + atk + bAtk + (wKind === "bow" ? Math.floor(D * 0.8) : 0)) * (wt ? wt.atk : 1) * (wKind === "staff" ? 1 : 1)),
+    matk: Math.round((3 + I * 2 + matk) * (wKind === "staff" ? 1.12 : 1)),
+    wKind,
     def: Math.floor(V / 2) + def + bDef,
     mdef,
-    hit: 60 + D * 2 + p.baseLevel + bHit,
+    hit: 60 + D * 2 + p.baseLevel + bHit + (wt ? wt.hit : 0),
     flee: 10 + A * 2 + p.baseLevel + bFlee,
-    crit: Math.min(45, L * 0.5),
-    aspd: Math.max(0.42, 1.28 - A * 0.018 - D * 0.006),
+    crit: Math.min(55, L * 0.5 + (wt ? wt.crit : 0)),
+    aspd: Math.max(0.3, (1.28 - A * 0.018 - D * 0.006) * (wt ? wt.speed : 1)),
     speed: 148 + A * 1.7,
     range,
   };
@@ -707,6 +718,86 @@ export function tryBuy(itemId: string) {
   p.marks -= price;
   sfxCoin();
   log(`Bought ${it.name}.`);
+  persist();
+  bump();
+}
+
+/** Equip the best-scoring gear for the current job in every slot. Returns how many changed. */
+export function autoEquip(quiet = false) {
+  const p = world.player;
+  if (!p) return 0;
+  let changed = 0;
+  for (let guard = 0; guard < 20; guard++) {
+    let swapped = false;
+    for (let i = 0; i < p.inv.length && !swapped; i++) {
+      const it = ITEMS[p.inv[i]!.itemId];
+      if (!it || !canEquip(p.job, it)) continue;
+      let slot: GearSlot;
+      if (it.slot === "acc") {
+        const s1 = p.eq.acc1 ? gearScore(ITEMS[p.eq.acc1]!, p.job) : -1;
+        const s2 = p.eq.acc2 ? gearScore(ITEMS[p.eq.acc2]!, p.job) : -1;
+        slot = s1 <= s2 ? "acc1" : "acc2";
+      } else slot = it.slot as GearSlot;
+      const cur = p.eq[slot] ? ITEMS[p.eq[slot]!] : undefined;
+      const now = cur ? gearScore(cur, p.job) : -Infinity;
+      if (gearScore(it, p.job) > now + 0.5) {
+        const id = p.inv[i]!.itemId;
+        p.inv[i]!.qty -= 1;
+        if (p.inv[i]!.qty <= 0) p.inv.splice(i, 1);
+        p.eq[slot] = id;
+        if (cur) addItem(cur.id, 1);
+        changed++;
+        swapped = true;
+        if (!quiet) log(`Auto-equipped ${it.name}.`);
+      }
+    }
+    if (!swapped) break;
+  }
+  if (changed) {
+    sfxEquip();
+    const d = derive(p);
+    p.hp = Math.min(p.hp, d.maxHp);
+    persist();
+    bump();
+  } else if (!quiet) {
+    log("Already wearing your best gear.");
+    bump();
+  }
+  return changed;
+}
+
+/** Items that "Sell junk" would take: ordinary loot only — never gear, consumables or rare finds. */
+export function junkIndexes() {
+  const p = world.player;
+  if (!p) return [];
+  const out: number[] = [];
+  p.inv.forEach((st, i) => {
+    const it = ITEMS[st.itemId];
+    if (it && it.slot === "etc" && !isRareOrBetter(it)) out.push(i);
+  });
+  return out;
+}
+
+export function sellJunk() {
+  const p = world.player;
+  if (!p) return;
+  let total = 0;
+  let n = 0;
+  for (const i of junkIndexes().reverse()) {
+    const st = p.inv[i]!;
+    const it = ITEMS[st.itemId]!;
+    total += sellPrice(it) * st.qty;
+    n += st.qty;
+    p.inv.splice(i, 1);
+  }
+  if (!n) {
+    log("No ordinary loot to sell.");
+    bump();
+    return;
+  }
+  p.marks += total;
+  sfxCoin();
+  log(`Sold ${n} items for ${total}z. Gear, potions and rare finds were kept.`);
   persist();
   bump();
 }

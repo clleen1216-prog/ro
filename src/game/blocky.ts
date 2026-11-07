@@ -19,6 +19,12 @@ const rgbCache = new Map<string, Rgb>();
 export function rgb(hex: string): Rgb {
   const hit = rgbCache.get(hex);
   if (hit) return hit;
+  const m = /^rgb\((\d+),(\d+),(\d+)\)$/.exec(hex);
+  if (m) {
+    const o: Rgb = [+m[1]!, +m[2]!, +m[3]!];
+    rgbCache.set(hex, o);
+    return o;
+  }
   let h = hex.replace("#", "");
   if (h.length === 3) h = h.split("").map((ch) => ch + ch).join("");
   const n = Number.parseInt(h.slice(0, 6), 16);

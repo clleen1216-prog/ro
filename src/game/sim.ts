@@ -2,7 +2,7 @@ import { EPX } from "@/game/blocky";
 import { sfxBow, sfxCast, sfxDown, sfxFoot, sfxHeal, sfxHit, sfxMiss, sfxPickup, sfxPortal, sfxSwing } from "@/game/audio";
 import { ITEMS, MONSTERS, SKILLS, TILE, getMap, isBlocked } from "@/game/content";
 import type { Dir, Drop, MapId, Monster, SkillId } from "@/game/types";
-import { INV_CAP, bump, burst, derive, dust, enterMap, float, grantKill, log, openNpc, useStack, world } from "@/game/world";
+import { INV_CAP, autoEquip, bump, burst, derive, dust, enterMap, float, grantKill, log, openNpc, useStack, world } from "@/game/world";
 
 function logPickup(name: string, rare?: boolean) {
   log(rare ? `Rare drop! You picked up ${name}.` : `Picked up ${name}.`);
@@ -256,18 +256,32 @@ export function basicAttack() {
   p.feign = 0;
   p.dir = face(target.x - p.x, target.y - p.y);
   p.attackCd = d.aspd;
-  p.swing = 0.34;
   const weapon = p.eq.weapon ? ITEMS[p.eq.weapon] : undefined;
-  if (weapon?.weapon === "bow") sfxBow();
-  else if (weapon?.weapon === "staff") sfxCast();
-  else sfxSwing();
+  const kind = weapon?.weapon;
+  const ranged = kind === "bow" || kind === "staff";
+  world.swingMax = ranged ? Math.max(0.4, Math.min(0.62, d.aspd * 0.55)) : Math.max(0.26, Math.min(0.42, d.aspd * 0.45));
+  p.swing = world.swingMax;
+  const rel = world.swingMax * (kind === "bow" ? 0.55 : kind === "staff" ? 0.5 : kind === "dagger" ? 0.45 : 0.4);
+  const dd = dist(p.x, p.y, target.x, target.y);
+  const fl = ranged ? dd / (kind === "bow" ? 1000 : 720) : 0;
+  const px0 = p.x;
+  const py0 = p.y;
+  later(rel, () => {
+    if (kind === "bow") sfxBow();
+    else if (kind === "staff") sfxCast();
+    else sfxSwing();
+    if (ranged) shoot(kind === "bow" ? "arrow" : "bolt", p.x + Math.sign(target.x - px0) * 14, p.y - 40, target.x, target.y - 34, kind === "bow" ? "#e8dcb8" : weapon?.tint ?? "#8fb4ff", Math.max(0.05, fl));
+  });
   const hitChance = Math.max(0.25, Math.min(0.97, d.hit / (d.hit + 8 + MONSTERS[target.kind]!.level * 2)));
   if (Math.random() > hitChance) {
-    float(target.x, target.y - 56, "Miss", "#b7ad9c");
-    sfxMiss();
+    later(rel + fl, () => {
+      float(target.x, target.y - 56, "Miss", "#b7ad9c");
+      sfxMiss();
+    });
     return;
   }
-  let raw = d.atk - MONSTERS[target.kind]!.def * 0.55;
+  const st = MONSTERS[target.kind]!;
+  let raw = kind === "staff" ? d.matk * 0.95 + d.atk * 0.4 - st.mdef * 0.5 : d.atk - st.def * 0.55;
   raw *= 0.9 + Math.random() * 0.2;
   let crit = false;
   if (Math.random() * 100 < d.crit) {
@@ -275,14 +289,52 @@ export function basicAttack() {
     crit = true;
   }
   const dmg = Math.max(1, Math.round(raw));
-  hurtMonster(target, dmg, crit ? "#e4b15a" : "#f6f0e4");
-  sfxHit();
-  world.shake = Math.min(5, world.shake + (crit ? 3 : 1.4));
+  later(rel + fl, () => {
+    if (!target.alive) return;
+    hurtNow(target, dmg, crit ? "#e4b15a" : kind === "staff" ? "#bcd4ff" : "#f6f0e4");
+    sfxHit();
+    world.shake = Math.min(5, world.shake + (crit ? 3 : 1.4));
+  });
+}
+
+const laterQ: { t: number; fn: () => void }[] = [];
+let hitDelay = 0;
+
+function later(sec: number, fn: () => void) {
+  laterQ.push({ t: sec, fn });
+}
+
+function shoot(kind: string, fx: number, fy: number, tx: number, ty: number, color: string, dur: number) {
+  world.shots.push({ kind, x: fx, y: fy, tx, ty, t: 0, dur, color });
+}
+
+function runLater(dt: number) {
+  for (let i = laterQ.length - 1; i >= 0; i--) {
+    const q = laterQ[i]!;
+    q.t -= dt;
+    if (q.t <= 0) {
+      laterQ.splice(i, 1);
+      q.fn();
+    }
+  }
+  for (const sh of world.shots) sh.t += dt;
+  world.shots = world.shots.filter((sh) => sh.t < sh.dur);
 }
 
 function hurtMonster(m: Monster, dmg: number, color: string) {
+  if (hitDelay > 0) {
+    later(hitDelay, () => {
+      if (m.alive) hurtNow(m, dmg, color);
+    });
+    return;
+  }
+  hurtNow(m, dmg, color);
+}
+
+function hurtNow(m: Monster, dmg: number, color: string) {
   const st = MONSTERS[m.kind]!;
   const p = world.player;
+  if (!m.alive) return;
   m.hp -= dmg;
   m.hurt = 0.2;
   m.aggro = st.behavior !== "skittish";
@@ -308,6 +360,14 @@ function hurtMonster(m: Monster, dmg: number, color: string) {
 }
 
 export function castSkill(id: SkillId) {
+  try {
+    castSkillInner(id);
+  } finally {
+    hitDelay = 0;
+  }
+}
+
+function castSkillInner(id: SkillId) {
   const p = world.player;
   if (!p || p.downFor > 0) return;
   const sk = SKILLS[id];
@@ -340,9 +400,27 @@ export function castSkill(id: SkillId) {
   p.sit = false;
   p.feign = 0;
   p.attackCd = Math.max(p.attackCd, d.aspd * 0.75);
-  p.swing = 0.34;
+  world.swingMax = 0.46;
+  p.swing = world.swingMax;
   sfxCast();
   const target = monsterById(world.targetId);
+  {
+    // skills land at the moment of release/impact, not when the key is pressed
+    const wk = p.eq.weapon ? ITEMS[p.eq.weapon]?.weapon : undefined;
+    const rangedSkill = ["spark", "frost", "ember", "twin", "shower", "storm"].includes(id);
+    const rel = rangedSkill ? world.swingMax * (wk === "bow" ? 0.55 : 0.5) : id === "firstAid" || id === "guard" || id === "focus" || id === "playDead" ? 0 : world.swingMax * 0.4;
+    const tgt = target ?? p;
+    const fl = rangedSkill ? dist(p.x, p.y, tgt.x, tgt.y) / 760 : 0;
+    hitDelay = rel + fl;
+    if (rangedSkill) {
+      const col = id === "frost" ? "#8fd0f0" : id === "spark" || id === "ember" ? "#ff8a3a" : id === "storm" ? "#f2e46a" : "#e8dcb8";
+      const kind2 = id === "twin" ? "arrow" : id === "shower" ? "rain" : id === "storm" ? "strike" : "bolt";
+      later(rel, () => {
+        shoot(kind2, p.x + Math.sign(tgt.x - p.x) * 14, p.y - 40, tgt.x, tgt.y - (kind2 === "rain" || kind2 === "strike" ? 0 : 34), col, Math.max(0.08, fl));
+        if (id === "twin") later(0.08, () => shoot("arrow", p.x + Math.sign(tgt.x - p.x) * 14, p.y - 40, tgt.x, tgt.y - 30, col, Math.max(0.08, fl)));
+      });
+    }
+  }
   if (id === "firstAid") healSelf(8 + p.baseLevel * 3);
   else if (id === "playDead") {
     p.feign = 5.5;
@@ -833,10 +911,16 @@ function pickups() {
     if (age < 0.45) continue;
     const dd = dist(p.x, p.y, drop.x, drop.y);
     // Loot drifts toward the player once they are close, like a magnet.
-    if (dd < 70 && dd > 20) {
-      const k = 1 - dd / 70;
-      drop.x += ((p.x - drop.x) / dd) * 140 * k * 0.016;
-      drop.y += ((p.y - drop.y) / dd) * 140 * k * 0.016;
+    if (world.auto.battle && dd > 20) {
+      // Auto Battle: every drop on the map is drawn in, no matter how far.
+      const sp = Math.min(900, 260 + dd * 1.4) * 0.016;
+      drop.x += ((p.x - drop.x) / dd) * Math.min(sp, dd);
+      drop.y += ((p.y - drop.y) / dd) * Math.min(sp, dd);
+      drop.ttl = drop.ttl === undefined ? undefined : Math.max(drop.ttl, 5);
+    } else if (dd < 110 && dd > 20) {
+      const k = 1 - dd / 110;
+      drop.x += ((p.x - drop.x) / dd) * 180 * k * 0.016;
+      drop.y += ((p.y - drop.y) / dd) * 180 * k * 0.016;
     }
     if (dd < 26) {
       const it = ITEMS[drop.itemId];
@@ -968,6 +1052,11 @@ function autoStep(dt: number, d: ReturnType<typeof derive>) {
   au.skillT = Math.max(0, au.skillT - dt);
   au.pathT = Math.max(0, au.pathT - dt);
   if (au.battle || au.travel) drinkIfNeeded(d);
+  au.equipT -= dt;
+  if (au.battle && au.autoEquip && au.equipT <= 0) {
+    au.equipT = 2;
+    autoEquip(true);
+  }
   if (au.travel) {
     if (world.mapId === au.travel) {
       log(`Arrived at ${getMap(au.travel).name}.`);
@@ -1007,14 +1096,15 @@ function autoStep(dt: number, d: ReturnType<typeof derive>) {
   if (target) {
     const dd = dist(p.x, p.y, target.x, target.y);
     if (au.skillT <= 0 && dd < d.range + 120) {
-      const choices = p.hotbar
-        .map((s) => (s && s.kind === "skill" ? s.id : null))
-        .filter((id): id is SkillId => Boolean(id))
-        .filter((id) => {
-          const sk = SKILLS[id];
-          const lv = p.skills[id] ?? 0;
-          return sk && lv > 0 && (sk.target === "enemy" || sk.target === "area") && p.sp >= sk.sp + Math.max(0, lv - 1) * 2 + 4;
-        });
+      const choices = (Object.keys(SKILLS) as SkillId[]).filter((id) => {
+        const sk = SKILLS[id];
+        const lv = p.skills[id] ?? 0;
+        if (!sk || lv <= 0 || world.auto.skills[id] === false) return false;
+        if (sk.target === "passive") return false;
+        const buff = sk.target === "self";
+        if (buff && (id === "playDead" || id === "firstAid" || world.auto.skills[id] !== true)) return false;
+        return p.sp >= sk.sp + Math.max(0, lv - 1) * 2 + 4;
+      });
       if (choices.length) {
         castSkill(choices[Math.floor(Math.random() * choices.length)]!);
         au.skillT = 1.4;
@@ -1043,6 +1133,7 @@ function autoStep(dt: number, d: ReturnType<typeof derive>) {
 export function step(dt: number) {
   const p = world.player;
   if (!p) return;
+  runLater(dt);
   if (p.downFor > 0) {
     p.downFor -= dt;
     updateMonsters(dt);

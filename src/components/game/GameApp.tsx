@@ -1,5 +1,5 @@
 import { useEffect, useRef, useSyncExternalStore } from "react";
-import { Backpack, CircleHelp, Compass, Shield, Sparkles, Swords, UserRound, Volume2, VolumeX, X } from "lucide-react";
+import { Backpack, CircleHelp, Compass, Shield, SlidersHorizontal, Sparkles, Swords, UserRound, Volume2, VolumeX, X } from "lucide-react";
 import { loadAll } from "@/game/assets";
 import { setMusicOn, setTrack, sfxClick, tick, trackTitle, unlock } from "@/game/audio";
 import {
@@ -24,6 +24,7 @@ import {
   jobExpNeed,
   sellPrice,
 } from "@/game/content";
+import { RARITY, rarityOf, weaponNote } from "@/game/gear";
 import { drawItemIcon, drawPreview, renderFrame } from "@/game/draw";
 import { cancelTravel, castSkill, holdMove, installProbe, pickAt, pointerDown, setAutoBattle, step, travelTo } from "@/game/sim";
 import type { GearSlot, HotSlot, Player, SkillId } from "@/game/types";
@@ -52,6 +53,9 @@ import {
   useStack,
   world,
   INV_CAP,
+  autoEquip,
+  junkIndexes,
+  sellJunk,
 } from "@/game/world";
 
 function typingTarget(target: EventTarget | null) {
@@ -111,6 +115,7 @@ function LookCanvas({ who }: { who: "draft" | "player" }) {
             ...world.draft,
             dir: 0,
             eq: blank,
+            job: "novice",
           });
       }
       frame = requestAnimationFrame(loop);
@@ -361,7 +366,7 @@ export function GameApp() {
               />
             </label>
             <p className="mt-3 text-sm text-muted">Hair style</p>
-            <div className="mt-1 flex gap-2">
+            <div className="mt-1 flex flex-wrap gap-2">
               {STYLES.map((s) => (
                 <button
                   key={s.id}
@@ -448,6 +453,9 @@ export function GameApp() {
               </IconBtn>
               <IconBtn label={world.auto.battle ? "Auto Battle ON (B)" : "Auto Battle (B)"} onClick={() => setAutoBattle(!world.auto.battle)} active={world.auto.battle}>
                 <Swords />
+              </IconBtn>
+              <IconBtn label="Auto Battle settings" onClick={() => togglePanel("auto")} active={world.panels.auto}>
+                <SlidersHorizontal />
               </IconBtn>
               <IconBtn label="Auto Navigation (N)" onClick={() => togglePanel("nav")} active={Boolean(world.auto.travel)}>
                 <Compass />
@@ -548,6 +556,7 @@ export function GameApp() {
             {world.panels.skills && <SkillWindow />}
             {world.panels.help && <HelpWindow />}
             {world.panels.nav && <NavWindow />}
+            {world.panels.auto && <AutoWindow />}
             {world.shop && <ShopWindow />}
             {world.storageOpen && <StorageWindow />}
           </div>
@@ -622,6 +631,62 @@ function IconBtn({ label, onClick, children, active }: { label: string; onClick:
     >
       <span className="size-5">{children}</span>
     </button>
+  );
+}
+
+function AutoWindow() {
+  const p = world.player;
+  if (!p) return null;
+  const list = (Object.keys(SKILLS) as SkillId[]).filter((id) => (SKILLS[id].job === "novice" || SKILLS[id].job === p.job) && SKILLS[id].target !== "passive" && (p.skills[id] ?? 0) > 0);
+  return (
+    <Window title="Auto Battle" onClose={() => togglePanel("auto")}>
+      <button
+        type="button"
+        className={`w-full rounded-md px-3 py-2 text-sm ${world.auto.battle ? "bg-hp text-ink" : "bg-gold text-ink"}`}
+        onClick={() => setAutoBattle(!world.auto.battle)}
+      >
+        {world.auto.battle ? "Stop Auto Battle (B)" : "Start Auto Battle (B)"}
+      </button>
+      <p className="mt-3 text-sm">Skills to use automatically</p>
+      {list.length === 0 && <p className="text-xs text-muted">No active skills learned yet. Spend skill points in the Skills window.</p>}
+      <ul className="mt-1 flex max-h-60 flex-col gap-1 overflow-auto">
+        {list.map((id) => {
+          const sk = SKILLS[id];
+          const buff = sk.target === "self";
+          const on = buff ? world.auto.skills[id] === true : world.auto.skills[id] !== false;
+          return (
+            <li key={id}>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={on}
+                  onChange={(e) => {
+                    world.auto.skills[id] = e.target.checked;
+                    bump();
+                  }}
+                />
+                <span className="flex-1">{sk.name}</span>
+                <span className="text-[10px] text-muted">
+                  {sk.sp} SP{buff ? " · buff" : ""}
+                </span>
+              </label>
+            </li>
+          );
+        })}
+      </ul>
+      <label className="mt-3 flex items-center gap-2 text-sm">
+        <input
+          type="checkbox"
+          checked={world.auto.autoEquip}
+          onChange={(e) => {
+            world.auto.autoEquip = e.target.checked;
+            bump();
+          }}
+        />
+        Auto-equip the best gear for my job
+      </label>
+      <p className="mt-2 text-[10px] text-muted">Auto Battle fights nearby monsters, drinks potions when low, and collects every drop on the map.</p>
+    </Window>
   );
 }
 
@@ -820,7 +885,7 @@ function EquipWindow() {
       </div>
       <p className="mt-2 text-xs text-muted">Click a worn piece to take it off. Two accessory slots sit on the right.</p>
       <p className="mt-3 text-sm text-muted">Hair</p>
-      <div className="mt-1 flex gap-2">
+      <div className="mt-1 flex flex-wrap gap-2">
         {STYLES.map((s) => (
           <button
             key={s.id}
@@ -861,10 +926,21 @@ function EquipWindow() {
   );
 }
 
+function rcol(item: { id: string } | undefined) {
+  const it = item ? ITEMS[item.id] : undefined;
+  return it ? RARITY[rarityOf(it)].color : undefined;
+}
+
+function tip(item: NonNullable<(typeof ITEMS)[string]>) {
+  const r = RARITY[rarityOf(item)].label;
+  const wn = weaponNote(item);
+  return `[${r}] ${item.name}: ${item.desc} ${itemStats(item)}${wn ? ` · ${wn}` : ""} · sells for ${sellPrice(item)}z`;
+}
+
 function Slot({ slot, id }: { slot: GearSlot; id: string | null }) {
   const item = id ? ITEMS[id] : undefined;
   return (
-    <button type="button" className="rounded-md border border-line bg-surface-2 p-1 text-left" onClick={() => unequip(slot)}>
+    <button type="button" title={item ? tip(item) : undefined} style={{ borderColor: rcol(item) }} className="rounded-md border border-line bg-surface-2 p-1 text-left" onClick={() => unequip(slot)}>
       <span className="block text-[10px] text-muted">{SLOT_LABEL[slot]}</span>
       {item ? <Icon id={item.id} /> : <span className="block h-8" />}
     </button>
@@ -881,9 +957,9 @@ function BagWindow() {
           const item = ITEMS[stack.itemId];
           if (!item) return null;
           return (
-            <button key={`${stack.itemId}-${i}`} type="button" title={`${item.name}: ${item.desc} ${itemStats(item)} · sells for ${sellPrice(item)}z`} className="rounded-md border border-line p-1 text-left" onClick={() => equipFromInventory(i)}>
+            <button key={`${stack.itemId}-${i}`} type="button" title={tip(item)} style={{ borderColor: rcol(item) }} className="rounded-md border border-line p-1 text-left" onClick={() => equipFromInventory(i)}>
               <Icon id={item.id} />
-              <span className="block truncate text-[10px]">
+              <span className="block truncate text-[10px]" style={{ color: rcol(item) }}>
                 {item.name}
                 {stack.qty > 1 ? ` ×${stack.qty}` : ""}
               </span>
@@ -891,6 +967,29 @@ function BagWindow() {
           );
         })}
       </div>
+      <div className="mt-2 flex flex-wrap gap-1">
+        <button type="button" className="rounded-md bg-gold px-2 py-1 text-xs text-ink" onClick={() => autoEquip()}>
+          Auto Equip best
+        </button>
+        <label className="flex items-center gap-1 px-1 text-xs text-muted">
+          <input
+            type="checkbox"
+            checked={world.auto.autoEquip}
+            onChange={(e) => {
+              world.auto.autoEquip = e.target.checked;
+              bump();
+            }}
+          />
+          keep gear optimal during Auto Battle
+        </label>
+      </div>
+      <p className="mt-1 text-[10px]">
+        {(Object.keys(RARITY) as (keyof typeof RARITY)[]).map((k) => (
+          <span key={k} className="mr-2" style={{ color: RARITY[k].color }}>
+            ■ {RARITY[k].label}
+          </span>
+        ))}
+      </p>
       {p.inv.length === 0 && <p className="text-sm text-muted">Empty. Defeat monsters and walk over their drops to collect them.</p>}
       <p className="mt-2 text-xs text-muted">Click gear to equip, a salve to drink. Right-click a hotbar slot to clear it.</p>
       <div className="mt-2 flex flex-wrap gap-1">
@@ -986,7 +1085,9 @@ function ShopWindow() {
             <li key={id} className="flex items-center gap-2">
               <Icon id={id} />
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm">{item.name}</span>
+                <span className="block truncate text-sm" style={{ color: rcol(item) }} title={tip(item)}>
+                  {item.name}
+                </span>
                 <span className="block truncate text-[10px] text-muted">{itemStats(item)}</span>
               </span>
               <button type="button" className="rounded-md bg-gold px-2 py-2 text-xs text-ink" onClick={() => tryBuy(id)}>
@@ -996,14 +1097,25 @@ function ShopWindow() {
           );
         })}
       </ul>
-      <p className="mt-3 text-sm">Sell</p>
+      <div className="mt-3 flex items-center justify-between gap-2">
+        <p className="text-sm">Sell</p>
+        <button
+          type="button"
+          className="rounded-md bg-gold px-2 py-1 text-xs text-ink disabled:opacity-40"
+          disabled={junkIndexes().length === 0}
+          onClick={() => sellJunk()}
+          title="Sells every loot item that is not rare or better. Gear, potions and rare finds are kept."
+        >
+          Sell all junk ({junkIndexes().length})
+        </button>
+      </div>
       <ul className="mt-1 flex max-h-48 flex-col gap-1 overflow-auto">
         {p.inv.map((stack, i) => {
           const item = ITEMS[stack.itemId];
           if (!item) return null;
           return (
             <li key={`${stack.itemId}-${i}`} className="flex items-center justify-between gap-2 text-sm">
-              <span className="truncate">
+              <span className="truncate" style={{ color: rcol(item) }} title={tip(item)}>
                 {item.name}
                 {stack.qty > 1 ? ` ×${stack.qty}` : ""}
               </span>

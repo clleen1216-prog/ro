@@ -1,7 +1,7 @@
 export type Dir = 0 | 1 | 2 | 3;
 export type MapId = "ambercross" | "southmead" | "poring" | "woods" | "dunes" | "crypt" | "orc";
 export type JobId = "novice" | "swordman" | "mage" | "archer";
-export type HairStyle = "bob" | "short" | "swept";
+export type HairStyle = "bob" | "short" | "swept" | "spiky" | "undercut" | "pompadour" | "ponytail" | "twintail" | "long" | "bun" | "braid" | "curly" | "odango" | "wavy";
 export type MonsterKind = string;
 export type Behavior = "passive" | "skittish" | "aggressive";
 export type GearSlot =

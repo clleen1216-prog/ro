@@ -1,7 +1,7 @@
 // Block (Minecraft-style) props, buildings and the humanoid actor.
 // All painted in texel space — see blocky.ts.
 
-import { B, PX, atkPose, blit, blitScratch, castShadowScratch, hash, lerp, limbPx, line, mk, rad, scratch, shade, sprite } from "@/game/blocky";
+import { B, PX, atkPose, blit, ease, blitScratch, castShadowScratch, hash, lerp, limbPx, line, mk, rad, scratch, shade, sprite } from "@/game/blocky";
 
 type Ctx = CanvasRenderingContext2D;
 
@@ -15,11 +15,12 @@ export type ActorParts = {
   weapon?: { weapon?: string; tint: string };
   shield?: { tint: string };
   acc?: string;
+  job?: string;
 };
 
 const SKIN = "#e0ac82";
 const SKIN_D = "#c98f66";
-const PANTS = "#3a4a8c";
+const PANTS0 = "#3a4a8c";
 const OAK = "#a07a46";
 const LOG = "#5a3d24";
 
@@ -246,48 +247,174 @@ export function buildingSprite(kind: string, w: number, h: number, hue?: string)
 
 const IRIS = "#3b3a8c";
 
-function hair(c: Ctx, style: string, hx: string, dir: number) {
+function hair(c: Ctx, style: string, hx: string, dir: number, sway = 0) {
   const hd = shade(hx, -0.16);
   const hl = shade(hx, 0.22);
+  const tie = "#d9506e";
   const bob = style === "bob";
   const swept = style === "swept";
-  if (dir === 3) {
-    B(c, -7, -28, 14, bob ? 14 : swept ? 11 : 9, hx, 0.14);
+  const view = dir === 3 ? "b" : dir === 0 ? "f" : "s";
+  const wave = (x: number, y: number, h: number, w = 3) => {
+    for (let i = 0; i < h; i += 2) B(c, x + (Math.floor(i / 2) % 2 ? 1 : 0), y + i, w, 2, hx, 0.14, false);
+  };
+  // ── back view ──
+  if (view === "b") {
+    const len: Record<string, number> = { bob: 14, swept: 11, short: 9, spiky: 9, undercut: 9, pompadour: 9, ponytail: 9, twintail: 9, long: 18, bun: 9, braid: 9, curly: 11, odango: 9, wavy: 17 };
+    B(c, -7, -28, 14, len[style] ?? 9, hx, 0.14);
     B(c, -5, -27, 6, 1, hl, 0, false);
-    B(c, -7, bob ? -15 : swept ? -18 : -20, 14, 1, hd, 0, false);
-    if (style === "short") B(c, -3, -30, 3, 2, hx, 0.14, false);
+    B(c, -7, -28 + (len[style] ?? 9) - 1, 14, 1, hd, 0, false);
+    if (style === "spiky") {
+      B(c, -6, -31, 3, 3, hx, 0.14, false);
+      B(c, -2, -32, 3, 4, hx, 0.14, false);
+      B(c, 2, -31, 3, 3, hx, 0.14, false);
+    } else if (style === "pompadour") B(c, -6, -32, 12, 4, hx, 0.14, false);
+    else if (style === "ponytail") {
+      B(c, -1, -27, 3, 2, tie, 0, false);
+      B(c, -1 + sway, -25, 3, 13, hx, 0.14, false);
+    } else if (style === "twintail") {
+      B(c, -10, -25, 3, 2, tie, 0, false);
+      B(c, 7, -25, 3, 2, tie, 0, false);
+      B(c, -10 + sway, -23, 3, 12, hx, 0.14, false);
+      B(c, 7 - sway, -23, 3, 12, hx, 0.14, false);
+    } else if (style === "bun") {
+      B(c, -3, -33, 6, 5, hx, 0.14);
+      B(c, -3, -29, 6, 1, tie, 0, false);
+    } else if (style === "braid") {
+      B(c, -1, -20, 3, 2, tie, 0, false);
+      for (let i = 0; i < 4; i++) B(c, -1 + (i % 2) + sway, -19 + i * 3, 3, 3, i % 2 ? hx : hd, 0.1, false);
+    } else if (style === "curly") {
+      B(c, -9, -30, 18, 9, hx, 0.2);
+      B(c, -9, -22, 3, 9, hx, 0.2, false);
+      B(c, 6, -22, 3, 9, hx, 0.2, false);
+    } else if (style === "odango") {
+      B(c, -9, -33, 5, 5, hx, 0.14);
+      B(c, 4, -33, 5, 5, hx, 0.14);
+    } else if (style === "long") B(c, -8, -24, 16, 2, hx, 0.14, false);
+    else if (style === "wavy") wave(-8, -22, 14, 16);
     return;
   }
-  if (dir === 0) {
+  // ── front view ──
+  if (view === "f") {
     B(c, -7, -28, 14, 4, hx, 0.14);
     B(c, -5, -27, 6, 1, hl, 0, false);
-    if (bob) {
-      B(c, -7, -24, 2, 10, hx, 0.14, false);
-      B(c, 5, -24, 2, 10, hx, 0.14, false);
-      B(c, -5, -24, 4, 2, hx, 0.14, false);
-      B(c, 1, -24, 4, 2, hx, 0.14, false);
-      B(c, -5, -22, 2, 1, hx, 0, false);
-      B(c, 3, -22, 2, 1, hx, 0, false);
-      B(c, -1, -24, 2, 1, hd, 0, false);
-    } else if (style === "short") {
-      B(c, -7, -24, 1, 4, hx, 0.14, false);
-      B(c, 6, -24, 1, 4, hx, 0.14, false);
-      B(c, -6, -24, 12, 1, hx, 0.14, false);
-      B(c, -3, -30, 3, 2, hx, 0.14, false);
-      B(c, 1, -29, 3, 1, hl, 0, false);
-      B(c, -4, -23, 2, 1, hx, 0, false);
-      B(c, 2, -23, 2, 1, hx, 0, false);
-    } else {
-      B(c, -7, -24, 2, 8, hx, 0.14, false);
-      B(c, 5, -24, 2, 4, hx, 0.14, false);
-      B(c, -6, -24, 9, 3, hx, 0.14, false);
-      B(c, 3, -24, 3, 1, hx, 0.14, false);
-      B(c, -3, -22, 3, 1, hx, 0, false);
-      B(c, 2, -31, 1, 3, hx, 0, false);
+    switch (style) {
+      case "bob":
+        B(c, -7, -24, 2, 10, hx, 0.14, false);
+        B(c, 5, -24, 2, 10, hx, 0.14, false);
+        B(c, -5, -24, 4, 2, hx, 0.14, false);
+        B(c, 1, -24, 4, 2, hx, 0.14, false);
+        B(c, -5, -22, 2, 1, hx, 0, false);
+        B(c, 3, -22, 2, 1, hx, 0, false);
+        B(c, -1, -24, 2, 1, hd, 0, false);
+        break;
+      case "short":
+        B(c, -7, -24, 1, 4, hx, 0.14, false);
+        B(c, 6, -24, 1, 4, hx, 0.14, false);
+        B(c, -6, -24, 12, 1, hx, 0.14, false);
+        B(c, -3, -30, 3, 2, hx, 0.14, false);
+        B(c, 1, -29, 3, 1, hl, 0, false);
+        B(c, -4, -23, 2, 1, hx, 0, false);
+        B(c, 2, -23, 2, 1, hx, 0, false);
+        break;
+      case "swept":
+        B(c, -7, -24, 2, 8, hx, 0.14, false);
+        B(c, 5, -24, 2, 4, hx, 0.14, false);
+        B(c, -6, -24, 9, 3, hx, 0.14, false);
+        B(c, 3, -24, 3, 1, hx, 0.14, false);
+        B(c, -3, -22, 3, 1, hx, 0, false);
+        B(c, 2, -31, 1, 3, hx, 0, false);
+        break;
+      case "spiky":
+        B(c, -6, -31, 3, 3, hx, 0.14, false);
+        B(c, -2, -33, 3, 5, hx, 0.14, false);
+        B(c, 2, -31, 3, 3, hx, 0.14, false);
+        B(c, 5, -29, 3, 2, hx, 0.14, false);
+        B(c, -8, -29, 3, 2, hx, 0.14, false);
+        B(c, -7, -24, 1, 4, hx, 0.14, false);
+        B(c, 6, -24, 1, 4, hx, 0.14, false);
+        B(c, -6, -24, 3, 2, hx, 0, false);
+        B(c, -1, -24, 3, 1, hx, 0, false);
+        B(c, 3, -24, 3, 2, hx, 0, false);
+        break;
+      case "undercut":
+        B(c, -6, -25, 10, 2, hx, 0.14, false);
+        B(c, -1, -30, 8, 3, hl, 0.1, false);
+        B(c, -7, -24, 1, 3, hd, 0, false);
+        B(c, 6, -24, 1, 3, hd, 0, false);
+        break;
+      case "pompadour":
+        B(c, -7, -32, 14, 5, hx, 0.14);
+        B(c, -5, -31, 8, 1, hl, 0, false);
+        B(c, -7, -24, 1, 5, hx, 0.14, false);
+        B(c, 6, -24, 1, 5, hx, 0.14, false);
+        B(c, -6, -24, 12, 1, hd, 0, false);
+        break;
+      case "ponytail":
+        B(c, -7, -24, 1, 4, hx, 0.14, false);
+        B(c, 6, -24, 1, 4, hx, 0.14, false);
+        B(c, -6, -24, 12, 1, hx, 0.14, false);
+        B(c, -4, -23, 3, 1, hx, 0, false);
+        B(c, 5, -27, 3, 2, tie, 0, false);
+        B(c, 6 + sway, -25, 3, 12, hx, 0.14, false);
+        break;
+      case "twintail":
+        B(c, -7, -24, 1, 5, hx, 0.14, false);
+        B(c, 6, -24, 1, 5, hx, 0.14, false);
+        B(c, -6, -24, 12, 2, hx, 0.14, false);
+        B(c, -10, -25, 3, 2, tie, 0, false);
+        B(c, 7, -25, 3, 2, tie, 0, false);
+        B(c, -10 + sway, -23, 3, 14, hx, 0.14, false);
+        B(c, 7 - sway, -23, 3, 14, hx, 0.14, false);
+        break;
+      case "long":
+        B(c, -8, -24, 3, 16, hx, 0.14, false);
+        B(c, 5, -24, 3, 16, hx, 0.14, false);
+        B(c, -6, -24, 12, 2, hx, 0.14, false);
+        B(c, -1, -24, 2, 1, hd, 0, false);
+        break;
+      case "bun":
+        B(c, -3, -34, 6, 6, hx, 0.14);
+        B(c, -3, -29, 6, 1, tie, 0, false);
+        B(c, -7, -24, 1, 4, hx, 0.14, false);
+        B(c, 6, -24, 1, 4, hx, 0.14, false);
+        B(c, -6, -24, 12, 2, hx, 0.14, false);
+        B(c, -1, -22, 2, 1, hx, 0, false);
+        break;
+      case "braid":
+        B(c, -7, -24, 1, 5, hx, 0.14, false);
+        B(c, 6, -24, 1, 5, hx, 0.14, false);
+        B(c, -6, -24, 12, 2, hx, 0.14, false);
+        B(c, 5, -23, 3, 2, tie, 0, false);
+        for (let i = 0; i < 5; i++) B(c, 5 + (i % 2) + sway, -21 + i * 3, 3, 3, i % 2 ? hx : hd, 0.1, false);
+        B(c, 6 + sway, -6, 3, 1, tie, 0, false);
+        break;
+      case "curly":
+        B(c, -9, -31, 18, 9, hx, 0.22);
+        B(c, -9, -23, 3, 10, hx, 0.22, false);
+        B(c, 6, -23, 3, 10, hx, 0.22, false);
+        B(c, -6, -24, 12, 2, hx, 0.2, false);
+        B(c, -7, -33, 4, 3, hx, 0.2, false);
+        B(c, 3, -33, 4, 3, hx, 0.2, false);
+        break;
+      case "odango":
+        B(c, -10, -33, 5, 5, hx, 0.14);
+        B(c, 5, -33, 5, 5, hx, 0.14);
+        B(c, -8, -28, 2, 1, tie, 0, false);
+        B(c, 6, -28, 2, 1, tie, 0, false);
+        B(c, -7, -24, 1, 5, hx, 0.14, false);
+        B(c, 6, -24, 1, 5, hx, 0.14, false);
+        B(c, -6, -24, 12, 2, hx, 0.14, false);
+        break;
+      case "wavy":
+        wave(-8, -24, 16);
+        wave(5, -24, 16);
+        B(c, -6, -24, 12, 2, hx, 0.14, false);
+        B(c, -2, -22, 2, 1, hx, 0, false);
+        break;
     }
     return;
   }
-  // side (facing right)
+  // ── side view (facing right) ──
   B(c, -7, -28, 14, 4, hx, 0.14);
   B(c, -5, -27, 6, 1, hl, 0, false);
   B(c, -7, -24, 6, bob ? 10 : swept ? 7 : 4, hx, 0.14);
@@ -297,7 +424,57 @@ function hair(c: Ctx, style: string, hx: string, dir: number) {
     B(c, 4, -23, 3, 2, hx, 0.14, false);
     B(c, 1, -31, 1, 3, hx, 0, false);
   }
-  if (style === "short") B(c, 0, -30, 3, 2, hx, 0.14, false);
+  switch (style) {
+    case "short":
+      B(c, 0, -30, 3, 2, hx, 0.14, false);
+      break;
+    case "spiky":
+      B(c, -5, -31, 3, 3, hx, 0.14, false);
+      B(c, -1, -33, 3, 5, hx, 0.14, false);
+      B(c, 3, -31, 3, 3, hx, 0.14, false);
+      B(c, -9, -28, 3, 2, hx, 0.14, false);
+      break;
+    case "undercut":
+      B(c, 0, -31, 8, 3, hl, 0.1, false);
+      B(c, -7, -24, 3, 3, hd, 0, false);
+      break;
+    case "pompadour":
+      B(c, -4, -32, 12, 5, hx, 0.14);
+      B(c, -2, -31, 8, 1, hl, 0, false);
+      break;
+    case "ponytail":
+      B(c, -9, -27, 3, 2, tie, 0, false);
+      B(c, -11 + sway, -25, 4, 12, hx, 0.14, false);
+      break;
+    case "twintail":
+      B(c, -9, -26, 3, 2, tie, 0, false);
+      B(c, -11 + sway, -24, 4, 14, hx, 0.14, false);
+      break;
+    case "long":
+      B(c, -9, -24, 6, 18, hx, 0.14, false);
+      break;
+    case "bun":
+      B(c, -4, -34, 7, 6, hx, 0.14);
+      B(c, -4, -29, 7, 1, tie, 0, false);
+      break;
+    case "braid":
+      B(c, -9, -23, 3, 2, tie, 0, false);
+      for (let i = 0; i < 5; i++) B(c, -10 + (i % 2) + sway, -21 + i * 3, 3, 3, i % 2 ? hx : hd, 0.1, false);
+      break;
+    case "curly":
+      B(c, -9, -31, 17, 9, hx, 0.22);
+      B(c, -9, -23, 6, 9, hx, 0.22, false);
+      B(c, -7, -33, 4, 3, hx, 0.2, false);
+      B(c, 1, -33, 4, 3, hx, 0.2, false);
+      break;
+    case "odango":
+      B(c, -6, -33, 5, 5, hx, 0.14);
+      B(c, -7, -28, 2, 1, tie, 0, false);
+      break;
+    case "wavy":
+      wave(-9, -24, 16, 6);
+      break;
+  }
 }
 
 function face(c: Ctx, dir: number, tn: number) {
@@ -338,8 +515,21 @@ function face(c: Ctx, dir: number, tn: number) {
 
 function headgear(c: Ctx, p: ActorParts, dir: number) {
   const side = dir === 1 || dir === 2;
-  const u = p.upper;
-  if (u?.hat === "cap" || u?.hat === "feather") {
+  const jb = p.job;
+  const u = p.upper ?? (jb === "archer" ? { hat: "feather", tint: "#3f7a34" } : jb === "mage" ? { hat: "wizard", tint: "#4a44b8" } : undefined);
+  if (jb === "swordman" && !p.upper) {
+    B(c, -7, -26, 14, 1, "#d03030", 0, false);
+    if (dir === 3) B(c, -2, -25, 3, 3, "#d03030", 0, false);
+    if (side) B(c, -9, -26, 3, 3, "#d03030", 0, false);
+  }
+  if (u?.hat === "wizard") {
+    B(c, -10, -27, 20, 2, u.tint, 0.1);
+    B(c, -6, -33, 12, 7, shade(u.tint, 0.05), 0.1);
+    B(c, -4, -38, 8, 5, shade(u.tint, 0.08), 0.1);
+    B(c, -1, -42, 5, 4, shade(u.tint, 0.1), 0.1);
+    B(c, 2, -44, 3, 2, shade(u.tint, 0.1), 0.1, false);
+    B(c, -6, -29, 12, 2, "#e4b15a", 0, false);
+  } else if (u?.hat === "cap" || u?.hat === "feather") {
     B(c, -7, -30, 14, 5, u.tint, 0.1);
     if (dir === 0) B(c, -7, -25, 14, 1, shade(u.tint, -0.3), 0, false);
     else if (side) B(c, 2, -25, 7, 1, shade(u.tint, -0.3), 0, false);
@@ -392,21 +582,49 @@ function headgear(c: Ctx, p: ActorParts, dir: number) {
   }
 }
 
-function weapon(c: Ctx, w: NonNullable<ActorParts["weapon"]>, x: number, y: number, ang: number, xs: number) {
+function weapon(c: Ctx, w: NonNullable<ActorParts["weapon"]>, x: number, y: number, ang: number, xs: number, pull = 0, glow = 0, nock = false) {
   const kind = w.weapon;
   const hi = shade(w.tint, 0.3);
   const ca = Math.cos(rad(ang));
   const sa = Math.sin(rad(ang));
   if (kind === "bow") {
-    line(c, x, y + 8, -90, 18, 1, "#7a5632", xs);
-    line(c, x + 2 * xs, y + 8, -90, 18, 1, "#e6e6e6", xs);
-    c.fillStyle = w.tint;
-    c.fillRect(Math.round(x), Math.round(y - 10), 1, 2);
+    // stave bulges forward; string runs tip to tip and is drawn back by `pull`
+    const wood = "#a8743a";
+    const nx = x - pull * 6 * Math.abs(xs);
+    const sgn = xs < 0 ? -1 : 1;
+    for (let i = -9; i <= 9; i++) {
+      const bx = x + (2 - Math.round((i * i) / 36)) * xs * (Math.abs(xs) < 0.6 ? 1.6 : 1);
+      B(c, bx, y + i, 1, 1, i % 4 === 0 ? shade(wood, -0.2) : wood, 0, false);
+    }
+    c.fillStyle = "#e6e6e6";
+    for (let i = 0; i <= 9; i++) {
+      const t = i / 9;
+      const sx = lerp(x, nx, 1 - t);
+      c.fillRect(Math.round(sx), Math.round(y - 9 + i), 1, 1);
+      c.fillRect(Math.round(sx), Math.round(y + 9 - i), 1, 1);
+    }
+    if (nock) {
+      line(c, nx, y, 0, 13, 1, "#c9b48a", xs * sgn);
+      c.fillStyle = "#dfe6ee";
+      c.fillRect(Math.round(nx + 13 * xs), Math.round(y - 1), 1, 3);
+      c.fillStyle = w.tint;
+      c.fillRect(Math.round(nx + 1 * xs), Math.round(y - 1), 2, 1);
+      c.fillRect(Math.round(nx + 1 * xs), Math.round(y + 1), 2, 1);
+    }
   } else if (kind === "staff") {
     line(c, x - ca * 7 * xs, y - sa * 7, ang, 36, 2, "#7a5632", xs);
     const tx = x + ca * 28 * xs;
     const ty = y + sa * 28;
-    B(c, tx - 3, ty - 3, 6, 6, w.tint, 0.1);
+    if (glow > 0) {
+      c.fillStyle = `rgba(255,255,255,${0.18 + glow * 0.3})`;
+      const r = 5 + Math.round(glow * 3);
+      c.fillRect(Math.round(tx - r), Math.round(ty - 1), r * 2, 2);
+      c.fillRect(Math.round(tx - 1), Math.round(ty - r), 2, r * 2);
+      c.fillStyle = w.tint;
+      c.fillRect(Math.round(tx - r + 1), Math.round(ty - r + 1), 2, 2);
+      c.fillRect(Math.round(tx + r - 3), Math.round(ty + r - 3), 2, 2);
+    }
+    B(c, tx - 3, ty - 3, 6, 6, glow > 0.4 ? shade(w.tint, 0.35) : w.tint, 0.1);
     c.fillStyle = "#fff";
     c.fillRect(Math.round(tx - 2), Math.round(ty - 2), 2, 1);
   } else {
@@ -426,6 +644,55 @@ function shield(c: Ctx, s: NonNullable<ActorParts["shield"]>, x: number, y: numb
 }
 
 const REST: Record<string, number> = { sword: -55, dagger: -40, staff: -85, bow: -90 };
+
+type Pose = { hand?: number; rest?: number; ang: number; bend: number; lunge: number; wang?: number; far?: number; pull: number; glow: number; nock: boolean };
+
+/** Per-weapon attack animation. Release moments match the damage timing in sim.ts. */
+function poseFor(wk: string, a: number): Pose {
+  const base = atkPose(a);
+  if (a < 0 || (wk !== "bow" && wk !== "staff" && wk !== "dagger")) return { ...base, pull: 0, glow: 0, nock: false };
+  if (wk === "bow") {
+    const REL = 0.55;
+    if (a < REL) {
+      const up = ease(Math.min(1, a / 0.16));
+      const dr = ease(Math.max(0, (a - 0.14) / (REL - 0.14)));
+      return { ang: lerp(90, -2, up), bend: 0, lunge: -dr, far: a < 0.14 ? lerp(90, 0, ease(a / 0.14)) : lerp(0, -158, dr), hand: dr, rest: 0, pull: dr, glow: 0, nock: a > 0.1 };
+    }
+    const r = ease((a - REL) / (1 - REL));
+    const snap = Math.max(0, 1 - (a - REL) / 0.08);
+    return { ang: a < 0.72 ? -2 : lerp(-2, 90, ease((a - 0.72) / 0.28)), bend: 0, lunge: lerp(1.5, 0, r), far: lerp(-170, 90, ease(Math.min(1, (a - REL) / 0.3))), hand: 1 + snap * 0.25, rest: ease(Math.max(0, (a - 0.7) / 0.3)), pull: 0, glow: 0, nock: false };
+  }
+  if (wk === "staff") {
+    if (a < 0.3) {
+      const e = ease(a / 0.3);
+      return { ang: lerp(90, -70, e), bend: 0, wang: lerp(-85, -128, e), lunge: -e * 0.6, pull: 0, glow: e * 0.3, nock: false };
+    }
+    if (a < 0.52) {
+      const e = ease((a - 0.3) / 0.22);
+      return { ang: lerp(-70, -8, e), bend: 0, wang: lerp(-128, -12, e), lunge: lerp(-0.6, 2, e), pull: 0, glow: 0.3 + e * 0.7, nock: false };
+    }
+    const e = ease((a - 0.52) / 0.48);
+    return { ang: lerp(-8, 90, e), bend: 0, wang: lerp(-12, -85, e), lunge: lerp(2, 0, e), pull: 0, glow: Math.max(0, 1 - e * 1.6), nock: false };
+  }
+  // dagger: cock back, quick stab, recover
+  if (a < 0.25) {
+    const e = ease(a / 0.25);
+    return { ang: lerp(90, 150, e), bend: 0, wang: lerp(-40, -12, e), lunge: -e, pull: 0, glow: 0, nock: false };
+  }
+  if (a < 0.45) {
+    const e = ease((a - 0.25) / 0.2);
+    return { ang: lerp(150, 0, e), bend: 0, wang: lerp(-12, 0, e), lunge: lerp(-1, 3, e), pull: 0, glow: 0, nock: false };
+  }
+  if (a < 0.58) return { ang: 0, bend: 0, wang: 0, lunge: 3, pull: 0, glow: 0, nock: false };
+  const e = ease((a - 0.58) / 0.42);
+  return { ang: lerp(0, 90, e), bend: 0, wang: lerp(0, -40, e), lunge: lerp(3, 0, e), pull: 0, glow: 0, nock: false };
+}
+
+const JOB_LOOK: Record<string, { shirt: string; pants: string; robe?: string }> = {
+  swordman: { shirt: "#b8433a", pants: "#4a3a30" },
+  archer: { shirt: "#4f8a3a", pants: "#6a5236" },
+  mage: { shirt: "#5a4fb0", pants: "#3b3482", robe: "#4b3fa0" },
+};
 
 /**
  * Paint the player/NPC into the scratch buffer and blit it with the feet at the
@@ -452,16 +719,19 @@ export function drawBlockActor(
   const side = dir === 1 || dir === 2;
   const front = dir === 0;
   const s = sit ? 0 : Math.sin(phase) * amt;
-  const shirt = parts.armor ? parts.armor.tint : trimCol;
+  const wk = parts.weapon?.weapon ?? "sword";
+  const pose = poseFor(wk, atk);
+  const jl = JOB_LOOK[parts.job ?? ""];
+  const shirt = parts.armor ? parts.armor.tint : jl ? jl.shirt : trimCol;
   const sy = sit ? 4 : 0;
-  const pose = atkPose(atk);
+  const PANTS = jl?.pants ?? PANTS0;
   const idle = Math.sin(time * 2.2) > 0.8 && amt < 0.1 ? 1 : 0;
   const yb = sit ? 0 : -Math.round(Math.abs(Math.cos(phase)) * amt * 1.2);
   const lunge = Math.round(pose.lunge);
-  const wk = parts.weapon?.weapon ?? "sword";
   const restAng = REST[wk] ?? -55;
   const shoe = parts.shoes?.tint ?? "#5a4632";
   const LH = sit ? 4 : 7;
+  const sway = Math.round(Math.sin(phase - 1) * amt * 1.6);
   if (dir === 1) c.scale(-1, 1);
 
   const belt = (x: number, w: number) => {
@@ -486,12 +756,13 @@ export function drawBlockActor(
     }
     c.save();
     c.translate(0, sy + yb + idle);
+    if (parts.job === "archer" && front) B(c, 3 + tn * 2, -19, 2, 6, "#6b4a2b", 0, false);
     const nearX = tn * 5.5;
     const farX = -tn * 2.5;
     const wpnX = tn === 0 ? (front ? 5.5 : -5.5) : front ? (tn > 0 ? nearX : farX) : tn > 0 ? farX : nearX;
     const othX = tn === 0 ? (front ? -5.5 : 5.5) : front ? (tn > 0 ? farX : nearX) : tn > 0 ? nearX : farX;
     const xs = tn ? 0.7 : 0.35;
-    const armO = sit ? 90 : 90 + s * 14;
+    const armO = atk >= 0 && pose.far !== undefined ? pose.far : sit ? 90 : 90 + s * 14;
     const rightAng = atk >= 0 ? pose.ang : sit ? 90 : 90 - s * 14;
     const wpnIsNear = tn === 0 || (front ? tn > 0 : tn < 0);
     if (tn) limbPx(c, wpnIsNear ? othX : wpnX, -14, wpnIsNear ? armO : rightAng, 8, 3, shade(shirt, -0.2), shade(SKIN, -0.12), 0.45, xs);
@@ -514,9 +785,21 @@ export function drawBlockActor(
       limbPx(c, othX, -14, armO, 8, 3, shirt, SKIN, 0.45, xs);
       limbPx(c, wpnX, -14, rightAng, 8, 3, shirt, SKIN, 0.45, xs);
     }
-    if (parts.armor) {
-      B(c, -7 + tn, -15, 3, 2, shade(shirt, 0.25), 0.05);
-      B(c, 4 + tn, -15, 3, 2, shade(shirt, 0.25), 0.05);
+    if (parts.armor || parts.job === "swordman") {
+      const pc = parts.armor ? shade(shirt, 0.25) : "#aeb8c4";
+      B(c, -7 + tn, -15, 3, 2, pc, 0.05);
+      B(c, 4 + tn, -15, 3, 2, pc, 0.05);
+    }
+    if (jl?.robe) {
+      B(c, tx0 - 1, -9, tw + 2, 7, jl.robe, 0.12);
+      B(c, tx0 + tw / 2 - 1, -9, 2, 7, shade(jl.robe, 0.2), 0, false);
+      B(c, tx0 - 1, -3, tw + 2, 1, "#e4b15a", 0, false);
+    }
+    if (parts.job === "archer" && dir === 3) {
+      B(c, -2 + tn, -20, 5, 11, "#6b4a2b", 0.1);
+      B(c, -2 + tn, -22, 1, 2, "#e8e8e8", 0, false);
+      B(c, 0 + tn, -23, 1, 3, "#e8e8e8", 0, false);
+      B(c, 2 + tn, -22, 1, 2, "#e8e8e8", 0, false);
     }
     if (parts.garment) {
       if (dir === 3) B(c, tx0 - 1, -15, tw + 2, 16 + Math.round(amt), parts.garment.tint, 0.14);
@@ -528,13 +811,13 @@ export function drawBlockActor(
     B(c, -6, -26, 12, 11, SKIN, 0.08);
     B(c, -6, -16, 12, 1, SKIN_D, 0, false);
     if (front) face(c, 0, tn);
-    hair(c, style, hairCol, dir);
+    hair(c, style, hairCol, dir, sway);
     headgear(c, parts, dir);
     c.restore();
     if (parts.weapon) {
       const ex = wpnX + Math.cos(rad(rightAng)) * 8 * xs;
       const ey = -14 + Math.sin(rad(rightAng)) * 8;
-      weapon(c, parts.weapon, ex, ey, rightAng + (restAng - 90) * (atk >= 0 ? pose.bend : 1), xs);
+      weapon(c, parts.weapon, ex, ey, pose.wang ?? rightAng + (restAng - 90) * (atk >= 0 ? pose.bend : 1), xs, pose.pull, pose.glow, false);
     }
     if (parts.shield) shield(c, parts.shield, (front ? -11 : 5) + (tn ? tn * 2 : 0), -13);
     if (parts.acc && front) B(c, -1 + tn * 2, -12, 2, 2, parts.acc, 0, false);
@@ -551,24 +834,48 @@ export function drawBlockActor(
       B(c, -4 - flow, -15, 2 + flow, 16, parts.garment.tint, 0.14);
     }
     const farAng = sit ? 90 : 90 - s * 36;
-    limbPx(c, 0, -13, farAng, 8, 3, shade(shirt, -0.2), shade(SKIN, -0.12), 0.45);
+    const bowDraw = atk >= 0 && wk === "bow" && pose.hand !== undefined;
+    if (!bowDraw) limbPx(c, 0, -13, farAng, 8, 3, shade(shirt, -0.2), shade(SKIN, -0.12), 0.45);
+    if (parts.job === "archer") {
+      B(c, -6, -19, 3, 9, "#6b4a2b", 0.1, false);
+      B(c, -6, -21, 1, 2, "#e8e8e8", 0, false);
+      B(c, -4, -22, 1, 3, "#e8e8e8", 0, false);
+    }
     B(c, -3, -15, 5, 8, shirt, 0.12);
     B(c, -3, -9, 5, 2, shade(shirt, -0.18), 0.08, false);
     belt(-3, 5);
     if (parts.shield) shield(c, parts.shield, -2, -13);
     const nearAng = atk >= 0 ? pose.ang : sit ? 90 : 90 + s * (parts.weapon ? 18 : 36);
     limbPx(c, 0, -13, nearAng, 8, 3, shirt, SKIN, 0.45);
-    if (parts.armor) B(c, -2, -15, 3, 2, shade(shirt, 0.25), 0.05);
+    if (bowDraw) {
+      const hd = pose.hand ?? 0;
+      const rs = pose.rest ?? 0;
+      const tx = lerp(8 - 6 * hd, 0, rs);
+      const ty = lerp(-13, -5, rs);
+      const dx = tx - 0;
+      const dy = ty + 13;
+      const d = Math.max(2, Math.min(9.6, Math.hypot(dx, dy)));
+      const base = Math.atan2(dy, dx);
+      const off = Math.acos(Math.min(1, d / 10));
+      const upA = (base - off) * (180 / Math.PI);
+      const ex2 = Math.cos(rad(upA)) * 5;
+      const ey2 = -13 + Math.sin(rad(upA)) * 5;
+      const loA = Math.atan2(ty - ey2, tx - ex2) * (180 / Math.PI);
+      limbPx(c, 0, -13, upA, 5, 3, shirt, shirt, 0.5);
+      limbPx(c, ex2, ey2, loA, 5, 3, shirt, SKIN, 0.3);
+    }
+    if (parts.armor || parts.job === "swordman") B(c, -2, -15, 3, 2, parts.armor ? shade(shirt, 0.25) : "#aeb8c4", 0.05);
+    if (jl?.robe) B(c, -4, -9, 7, 7, jl.robe, 0.12);
     if (parts.weapon) {
       const ex = Math.cos(rad(nearAng)) * 8;
       const ey = -13 + Math.sin(rad(nearAng)) * 8;
-      weapon(c, parts.weapon, ex, ey, nearAng + (restAng - 90) * (atk >= 0 ? pose.bend : 1), 1);
+      weapon(c, parts.weapon, ex, ey, pose.wang ?? nearAng + (restAng - 90) * (atk >= 0 ? pose.bend : 1), 1, pose.pull, pose.glow, pose.nock);
     }
     if (parts.lower?.hat === "scarf") B(c, -4, -16, 6, 3, parts.lower.tint, 0.1, false);
     B(c, -6, -26, 12, 11, SKIN, 0.08);
     B(c, -6, -16, 12, 1, SKIN_D, 0, false);
     face(c, 2, 0);
-    hair(c, style, hairCol, 2);
+    hair(c, style, hairCol, 2, sway);
     headgear(c, parts, 2);
     c.restore();
   }

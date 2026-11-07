@@ -1,6 +1,7 @@
 import type {
   Behavior,
   GearSlot,
+  HairStyle,
   HatKind,
   IconKind,
   ItemSlot,
@@ -63,10 +64,21 @@ export const TRIMS = [
   { id: "ink", label: "Ink", hex: "#2a2a32" },
 ] as const;
 
-export const STYLES: { id: "bob" | "short" | "swept"; label: string }[] = [
+export const STYLES: { id: HairStyle; label: string }[] = [
   { id: "bob", label: "Bob" },
   { id: "short", label: "Cropped" },
   { id: "swept", label: "Swept" },
+  { id: "spiky", label: "Spiky" },
+  { id: "undercut", label: "Undercut" },
+  { id: "pompadour", label: "Pompadour" },
+  { id: "ponytail", label: "Ponytail" },
+  { id: "twintail", label: "Twin tails" },
+  { id: "long", label: "Long" },
+  { id: "wavy", label: "Wavy long" },
+  { id: "bun", label: "Top bun" },
+  { id: "odango", label: "Odango buns" },
+  { id: "braid", label: "Side braid" },
+  { id: "curly", label: "Curly puff" },
 ];
 
 export type ItemDef = {

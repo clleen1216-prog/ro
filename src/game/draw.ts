@@ -1,3 +1,4 @@
+import { rarityColor, RARITY, rarityOf } from "@/game/gear";
 import { buildingSprite, drawBlockActor, propSprite, type ActorParts } from "@/game/blockart";
 import { B, EPX, PX, blit, castShadow, hash, mk, setEntityPx, tileTexture } from "@/game/blocky";
 import { drawCreature, hasLook } from "@/game/creatures";
@@ -29,6 +30,60 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
 }
 
 
+
+function hexRgb(h: string): [number, number, number] {
+  const n = Number.parseInt(h.replace("#", ""), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+function drawShots(ctx: CanvasRenderingContext2D) {
+  for (const sh of world.shots) {
+    const k = Math.min(1, sh.t / sh.dur);
+    const x = sh.x + (sh.tx - sh.x) * k;
+    const y = sh.y + (sh.ty - sh.y) * k - Math.sin(k * Math.PI) * (sh.kind === "arrow" ? 10 : 0);
+    const ang = Math.atan2(sh.ty - sh.y, sh.tx - sh.x);
+    if (sh.kind === "arrow") {
+      for (let i = 0; i < 6; i++) {
+        const px = Math.round((x - Math.cos(ang) * i * 3) / 3) * 3;
+        const py = Math.round((y - Math.sin(ang) * i * 3) / 3) * 3;
+        ctx.fillStyle = i === 0 ? "#d8dde4" : i > 4 ? "#e8e0c8" : "#a07a46";
+        ctx.fillRect(px - 1, py - 1, 3, 3);
+      }
+    } else if (sh.kind === "bolt") {
+      for (let i = 0; i < 4; i++) {
+        const px = Math.round((x - Math.cos(ang) * i * 7) / 3) * 3;
+        const py = Math.round((y - Math.sin(ang) * i * 7) / 3) * 3;
+        ctx.globalAlpha = 1 - i * 0.22;
+        ctx.fillStyle = i === 0 ? "#ffffff" : sh.color;
+        const s = i === 0 ? 9 : 6;
+        ctx.fillRect(px - s / 2, py - s / 2, s, s);
+      }
+      ctx.globalAlpha = 1;
+    } else if (sh.kind === "rain") {
+      for (let i = 0; i < 7; i++) {
+        const ox = ((i * 37) % 90) - 45;
+        const kk = Math.max(0, Math.min(1, (sh.t - i * 0.02) / (sh.dur + 0.1)));
+        const ay = sh.ty - 170 + kk * 170 + ((i * 13) % 30) - 15;
+        for (let j = 0; j < 4; j++) {
+          ctx.fillStyle = j === 3 ? "#d8dde4" : "#a07a46";
+          ctx.fillRect(Math.round((sh.tx + ox) / 3) * 3, Math.round((ay - 9 + j * 3) / 3) * 3, 3, 3);
+        }
+      }
+    } else if (sh.kind === "strike") {
+      ctx.globalAlpha = 1 - k * 0.7;
+      let lx = sh.tx;
+      for (let yy = sh.ty - 220; yy < sh.ty; yy += 12) {
+        lx += ((yy * 7) % 5) * 2 - 4;
+        ctx.fillStyle = "#fff6b0";
+        ctx.fillRect(Math.round(lx / 3) * 3, yy, 6, 12);
+        ctx.fillStyle = sh.color;
+        ctx.fillRect(Math.round(lx / 3) * 3 - 3, yy, 3, 12);
+      }
+      ctx.globalAlpha = 1;
+    }
+  }
+}
+
 function shadow(ctx: CanvasRenderingContext2D, x: number, y: number, rx: number) {
   const w = Math.max(PX * 3, Math.round((rx * 2) / PX) * PX);
   const h = Math.max(PX * 2, Math.round((rx * 0.7) / PX) * PX);
@@ -52,19 +107,20 @@ function label(ctx: CanvasRenderingContext2D, text: string, x: number, y: number
 }
 
 type GearItem = { hat?: string; weapon?: string; tint: string };
-function partsFromEq(eq: Record<GearSlot, string | null>): ActorParts {
+function partsFromEq(eq: Record<GearSlot, string | null>, job?: string): ActorParts {
   const g = (id: string | null): GearItem | undefined => (id ? (ITEMS[id] as GearItem | undefined) : undefined);
   const acc = g(eq.acc1) ?? g(eq.acc2);
   return {
     upper: g(eq.headUpper),
     mid: g(eq.headMid),
     lower: g(eq.headLower),
-    armor: g(eq.armor),
+    armor: job && job !== "novice" && eq.armor === "cotton-shirt" ? undefined : g(eq.armor),
     garment: g(eq.garment),
     shoes: g(eq.shoes),
     weapon: g(eq.weapon),
     shield: g(eq.shield),
     acc: acc?.tint,
+    job,
   };
 }
 
@@ -86,11 +142,12 @@ function drawActor(
   atk = -1,
   parts?: ActorParts,
   turn = 0,
+  job?: string,
 ) {
   shadow(ctx, x, y, 3 * EPX);
   ctx.save();
   ctx.translate(Math.round(x + ox), Math.round(y + oy));
-  drawBlockActor(ctx, dir, phase, amt, style, hairHex(hair), trimHex(trim), parts ?? partsFromEq(eq), sit, flash, atk, world.time, turn);
+  drawBlockActor(ctx, dir, phase, amt, style, hairHex(hair), trimHex(trim), parts ?? partsFromEq(eq, job), sit, flash, atk, world.time, turn);
   ctx.restore();
 }
 
@@ -147,8 +204,16 @@ export function drawItemIcon(ctx: CanvasRenderingContext2D, item: ItemDef, x: nu
     iconCache.set(item.id, cv);
   }
   ctx.save();
+  const rc = rarityColor(item);
   ctx.fillStyle = "rgba(24, 24, 30, 0.6)";
   ctx.fillRect(x, y, s, s);
+  if (rc !== RARITY.normal.color) {
+    ctx.fillStyle = rc;
+    ctx.fillRect(x, y, s, 2);
+    ctx.fillRect(x, y + s - 2, s, 2);
+    ctx.fillRect(x, y, 2, s);
+    ctx.fillRect(x + s - 2, y, 2, s);
+  }
   ctx.fillStyle = "rgba(255,255,255,0.14)";
   ctx.fillRect(x, y, s, 2);
   ctx.fillRect(x, y, 2, s);
@@ -795,22 +860,24 @@ export function renderFrame(canvas: HTMLCanvasElement, dt: number) {
         } else lift = Math.abs(Math.sin((age - 0.5) * 7)) * Math.max(0, 6 - (age - 0.5) * 12);
         const bob = age > 0.8 ? Math.sin(world.time * 4 + drop.x) * 2.5 : 0;
         shadow(ctx, drop.x, drop.y, 10);
-        if (drop.rare) {
-          const glow = 0.35 + Math.sin(world.time * 5) * 0.15;
+        const rk = RARITY[rarityOf(it)];
+        if (drop.rare || rk.rank >= 1) {
+          const glow = 0.3 + rk.rank * 0.05 + Math.sin(world.time * 5) * 0.12;
+          const [cr, cg, cb] = hexRgb(rk.rank >= 1 ? rk.color : "#ffe27a");
           ctx.save();
           const grad = ctx.createRadialGradient(drop.x, drop.y - 16, 2, drop.x, drop.y - 16, 30);
-          grad.addColorStop(0, `rgba(255,226,122,${glow + 0.25})`);
-          grad.addColorStop(1, "rgba(255,226,122,0)");
+          grad.addColorStop(0, `rgba(${cr},${cg},${cb},${glow + 0.25})`);
+          grad.addColorStop(1, `rgba(${cr},${cg},${cb},0)`);
           ctx.fillStyle = grad;
           ctx.fillRect(drop.x - 30, drop.y - 46, 60, 60);
-          ctx.fillStyle = `rgba(255,226,122,${glow * 0.6})`;
-          ctx.fillRect(drop.x - 1.5, drop.y - 90, 3, 78);
+          ctx.fillStyle = `rgba(${cr},${cg},${cb},${glow * 0.6})`;
+          if (rk.rank >= 2 || drop.rare) ctx.fillRect(drop.x - 1.5, drop.y - 90 - rk.rank * 12, 3, 78 + rk.rank * 12);
           ctx.restore();
         }
         drawItemIcon(ctx, it, drop.x - 12 + dxs, drop.y - 28 - lift + bob, 24);
         const pl = world.player;
         if (pl && Math.hypot(pl.x - drop.x, pl.y - drop.y) < 120 && age > 0.5) {
-          label(ctx, it.name, drop.x, drop.y - 34 + bob, drop.rare ? "#ffd86a" : "#f6f0e4");
+          label(ctx, it.name, drop.x, drop.y - 34 + bob, rk.rank >= 1 ? rk.color : drop.rare ? "#ffd86a" : "#f6f0e4");
         }
       },
     });
@@ -824,13 +891,13 @@ export function renderFrame(canvas: HTMLCanvasElement, dt: number) {
         const moving = p.speedInstant > 8 && p.downFor <= 0 && p.feign <= 0;
         const amt = moving ? Math.min(1, p.speedInstant / 70) : 0;
         const phase = p.anim * (Math.PI / 2);
-        const atk = p.swing > 0 ? 1 - p.swing / 0.34 : -1;
+        const atk = p.swing > 0 ? 1 - p.swing / world.swingMax : -1;
         const down = p.downFor > 0;
         ctx.save();
         if (down || p.feign > 0) ctx.globalAlpha = down ? 0.5 : 0.72;
         const tg = p.swing > 0 ? world.monsters.find((mm) => mm.id === world.targetId && mm.alive) : undefined;
         const fc = face8("player", p.x, p.y, p.dir, tg ?? null);
-        drawActor(ctx, p.x, p.y, fc.dir, phase, amt, p.style, p.hair, p.trim, p.eq, p.sit || p.feign > 0 || down, p.flash, 0, 0, atk, undefined, fc.turn);
+        drawActor(ctx, p.x, p.y, fc.dir, phase, amt, p.style, p.hair, p.trim, p.eq, p.sit || p.feign > 0 || down, p.flash, 0, 0, atk, undefined, fc.turn, p.job);
         ctx.restore();
         if (down) return;
         label(ctx, p.name, p.x, p.y - 33 * EPX, "#fff6df");
@@ -869,6 +936,8 @@ export function renderFrame(canvas: HTMLCanvasElement, dt: number) {
       ctx.fillRect(Math.round(cm.x) - 3, Math.round(cm.y) - 3, 6, 6);
     }
   }
+  drawShots(ctx);
+
   for (const f of world.floats) {
     ctx.globalAlpha = Math.max(0, Math.min(1, f.life * 1.4));
     const pop = f.big ? 1 + Math.max(0, 0.5 - (1.15 - f.life) * 3) : 1;
@@ -942,7 +1011,7 @@ export function renderFrame(canvas: HTMLCanvasElement, dt: number) {
   }
 }
 
-export function drawPreview(canvas: HTMLCanvasElement, p: Pick<Player, "style" | "hair" | "trim" | "eq" | "dir"> & { anim?: number; speedInstant?: number }) {
+export function drawPreview(canvas: HTMLCanvasElement, p: Pick<Player, "style" | "hair" | "trim" | "eq" | "dir" | "job"> & { anim?: number; speedInstant?: number }) {
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
   const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -955,6 +1024,6 @@ export function drawPreview(canvas: HTMLCanvasElement, p: Pick<Player, "style" |
   const moving = (p.speedInstant ?? 0) > 8;
   const prevPx = EPX;
   setEntityPx(5);
-  drawActor(ctx, w / 2, h - 18, p.dir, (p.anim ?? 0) * (Math.PI / 2), moving ? 1 : 0, p.style, p.hair, p.trim, p.eq, false, 0, 0, 0, -1);
+  drawActor(ctx, w / 2, h - 18, p.dir, (p.anim ?? 0) * (Math.PI / 2), moving ? 1 : 0, p.style, p.hair, p.trim, p.eq, false, 0, 0, 0, -1, undefined, 0, p.job);
   setEntityPx(prevPx);
 }
