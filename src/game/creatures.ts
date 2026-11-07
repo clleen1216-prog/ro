@@ -3,11 +3,11 @@
 // is ~22 texels tall) with its feet at (0,0), facing right in side view.
 // `f` scales the design to the monster's draw size.
 
-import { B, blitScratch, castShadowScratch, scratch, shade } from "@/game/blocky";
+import { B, atkPose, blitScratch, castShadowScratch, limbPx, line, scratch, shade } from "@/game/blocky";
 
 type Ctx = CanvasRenderingContext2D;
 type View = "f" | "s" | "b";
-type G = { c: Ctx; f: number; t: number; m: number; v: View };
+type G = { c: Ctx; f: number; t: number; m: number; v: View; atk: number };
 
 const INK = "#1b1620";
 
@@ -65,19 +65,31 @@ type Hum = {
 
 function humanoid(g: G, o: Hum) {
   const ph = sw(g);
+  const f = g.f;
+  const S = (v: number) => Math.round(v * f);
   const lw = 4 + (o.wide ?? 0) / 2;
   const tw = 8 + (o.wide ?? 0);
   const hw = o.headW ?? 7;
   const side = g.v === "s";
-  const legA = Math.round(ph * 2);
+  const pose = atkPose(g.atk);
+  const amt = g.m ? 1 : 0;
+  const armsFwd = o.armsFwd && g.atk < 0;
+  const nearAng = g.atk >= 0 ? pose.ang : armsFwd ? -8 + ph * 5 * amt : 90 + ph * 30 * amt;
+  const legCol = o.pants;
   if (!side) {
-    R(g, -lw, -6 + (ph > 0.3 ? -1 : 0), lw, 6, o.pants, 0.1);
-    R(g, 0, -6 + (ph < -0.3 ? -1 : 0), lw, 6, shade(o.pants, -0.06), 0.1);
+    const liftA = Math.max(0, ph) * 2;
+    const liftB = Math.max(0, -ph) * 2;
+    R(g, -lw, -6 - liftA * (g.m ? 1 : 0), lw, 6, legCol, 0.1);
+    R(g, 0, -6 - liftB * (g.m ? 1 : 0), lw, 6, shade(legCol, -0.06), 0.1);
   } else {
-    R(g, -2 + legA * 0.5, -6, 4, 6, shade(o.pants, -0.08), 0.1);
-    R(g, -2 - legA * 0.5, -6, 4, 6, o.pants, 0.1);
+    limbPx(g.c, 0, -S(6), 90 - ph * 34 * amt, S(7), S(4), shade(legCol, -0.1), shade(legCol, -0.25), 0.8);
+    limbPx(g.c, 0, -S(6), 90 + ph * 34 * amt, S(7), S(4), legCol, shade(legCol, -0.15), 0.8);
   }
   const tw2 = side ? tw * 0.55 : tw;
+  const lunge = g.atk >= 0 ? pose.lunge : 0;
+  g.c.save();
+  g.c.translate(Math.round(lunge * (side ? f : 0)), 0);
+  if (side) limbPx(g.c, 0, -S(13), 90 - ph * 36 * amt, S(8), S(3), shade(o.skin, -0.12), shade(o.skin, -0.2), 0.8);
   R(g, -tw2 / 2, -14, tw2, 8, o.shirt, 0.14);
   if (o.ribs && g.v !== "b") for (let i = 0; i < 3; i++) R(g, -tw2 / 2 + 1, -13 + i * 2.5, tw2 - 2, 1, shade(o.shirt, -0.4), 0, false);
   if (o.rot) {
@@ -85,16 +97,27 @@ function humanoid(g: G, o: Hum) {
     R(g, tw2 / 2 - 3, -8, 2, 1, "#4a5a36", 0, false);
   }
   const aw = 3;
+  const wpnTip = { x: 0, y: 0, ang: 0, xs: 1 };
   if (side) {
-    R(g, -1.5, -14, aw, 8, shade(o.skin, -0.08), 0.1);
-    if (o.armsFwd) R(g, 0, -14, 8, aw, o.skin, 0.1);
-    else R(g, -1.5 + legA * 0.4, -14, aw, 8, o.skin, 0.1);
-  } else if (o.armsFwd && g.v === "f") {
-    R(g, -tw / 2 - aw, -14, aw, 3, o.skin, 0.1);
-    R(g, tw / 2, -14, aw, 3, o.skin, 0.1);
+    limbPx(g.c, 0, -S(13), nearAng, S(8), S(3), o.skin, shade(o.skin, -0.05), 0.8);
+    wpnTip.x = Math.cos((nearAng * Math.PI) / 180) * S(8);
+    wpnTip.y = -S(13) + Math.sin((nearAng * Math.PI) / 180) * S(8);
+    wpnTip.ang = nearAng;
   } else {
-    R(g, -tw / 2 - aw, -14 + (ph > 0.3 ? 1 : 0), aw, 8, o.skin, 0.1);
-    R(g, tw / 2, -14 + (ph < -0.3 ? 1 : 0), aw, 8, o.skin, 0.1);
+    const xs = 0.4;
+    const ax = tw / 2 + aw / 2;
+    const raise = g.atk >= 0 ? pose.ang : 90 - ph * 12 * amt;
+    if (armsFwd && g.v === "f") {
+      R(g, -tw / 2 - aw, -14, aw, 3, o.skin, 0.1);
+      R(g, tw / 2, -14, aw, 3, o.skin, 0.1);
+    } else {
+      limbPx(g.c, -S(ax), -S(13), 90 + ph * 12 * amt, S(8), S(3), o.skin, shade(o.skin, -0.05), 0.8, xs);
+      limbPx(g.c, S(ax), -S(13), raise, S(8), S(3), o.skin, shade(o.skin, -0.05), 0.8, xs);
+    }
+    wpnTip.x = S(ax) + Math.cos((raise * Math.PI) / 180) * S(8) * xs;
+    wpnTip.y = -S(13) + Math.sin((raise * Math.PI) / 180) * S(8);
+    wpnTip.ang = raise;
+    wpnTip.xs = xs;
   }
   if (o.shoulder) {
     if (side) R(g, -2.5, -15, 5, 2, o.shoulder, 0.1);
@@ -118,23 +141,27 @@ function humanoid(g: G, o: Hum) {
     }
   }
   if (o.crown) R(g, hx - 0.5, -22, hw + 1, 2, o.crown, 0.1);
-  const wx = side ? 4 : tw / 2 + aw - 1;
-  const wy = -9 + (o.armsFwd ? -4 : 0);
+  // weapon follows the hand and swings with the arm
+  const bend = g.atk >= 0 ? pose.bend : 1;
+  const wa = wpnTip.ang + (-75 - 90) * bend;
+  const { x: wx, y: wy, xs: wxs } = wpnTip;
+  const c = g.c;
+  const len = S(15);
+  const tipX = wx + Math.cos((wa * Math.PI) / 180) * len * wxs;
+  const tipY = wy + Math.sin((wa * Math.PI) / 180) * len;
   if (o.weapon === "axe") {
-    R(g, wx, wy - 12, 1, 15, "#6b442c", 0.1, false);
-    R(g, wx - 3, wy - 12, 4, 5, "#9aa0aa", 0.1);
+    line(c, wx, wy, wa, len, 1, "#6b442c", wxs);
+    B(c, tipX - S(2), tipY - S(2), S(4), S(5), "#9aa0aa", 0.1);
   } else if (o.weapon === "club") {
-    R(g, wx, wy - 12, 2, 15, "#7a5632", 0.14, false);
-    R(g, wx - 1, wy - 14, 4, 6, "#8a6638", 0.14);
+    line(c, wx, wy, wa, len, S(2), "#7a5632", wxs);
+    B(c, tipX - S(2), tipY - S(3), S(4), S(6), "#8a6638", 0.14);
   } else if (o.weapon === "bow") {
-    R(g, wx, wy - 10, 1, 13, "#7a5632", 0, false);
-    R(g, wx + 1, wy - 11, 1, 2, "#7a5632", 0, false);
-    R(g, wx + 1, wy + 2, 1, 2, "#7a5632", 0, false);
-    R(g, wx + 2, wy - 10, 1, 13, "#ddd", 0, false);
+    line(c, wx + 1, wy + 6, -90, S(13), 1, "#7a5632", 1);
+    line(c, wx + 3, wy + 6, -90, S(13), 1, "#ddd", 1);
   } else if (o.weapon === "sword") {
-    R(g, wx, wy - 12, 2, 13, "#cfd6de", 0.05, false);
-    R(g, wx - 1, wy + 1, 4, 1, "#d2a23a", 0, false);
+    line(c, wx, wy, wa, len, 2, "#cfd6de", wxs);
   }
+  g.c.restore();
 }
 
 function orc(g: G, o: { skin: string; armor: string; cloth: string; weapon: Hum["weapon"]; rot?: boolean; bone?: boolean; boss?: boolean }) {
@@ -180,11 +207,12 @@ function quad(g: G, o: { body: string; head: string; ear: string; tail: string; 
   const b = o.big ?? 1;
   const ph = sw(g);
   if (g.v === "s") {
-    const lg = Math.round(ph * 2);
-    R(g, -7 * b + lg, -4, 3, 4, o.legs, 0.1);
-    R(g, -2 * b - lg, -4, 3, 4, shade(o.legs, -0.1), 0.1);
-    R(g, 3 * b + lg, -4, 3, 4, o.legs, 0.1);
-    R(g, 6 * b - lg, -4, 3, 4, shade(o.legs, -0.1), 0.1);
+    const am = g.m ? 28 : 0;
+    const S = (v: number) => Math.round(v * g.f);
+    limbPx(g.c, S(-6 * b), -S(4), 90 + ph * am, S(5), S(3), o.legs, shade(o.legs, -0.25), 0.75);
+    limbPx(g.c, S(-1 * b), -S(4), 90 - ph * am, S(5), S(3), shade(o.legs, -0.1), shade(o.legs, -0.3), 0.75);
+    limbPx(g.c, S(4 * b), -S(4), 90 - ph * am, S(5), S(3), o.legs, shade(o.legs, -0.25), 0.75);
+    limbPx(g.c, S(7 * b), -S(4), 90 + ph * am, S(5), S(3), shade(o.legs, -0.1), shade(o.legs, -0.3), 0.75);
     R(g, -9 * b, -11 * b, 18 * b, 8 * b, o.body, 0.14);
     R(g, -12 * b, -12 * b + Math.round(ph), 4, 3, o.tail, 0.1);
     R(g, 7 * b, -16 * b, 8, 7, o.head, 0.12);
@@ -393,13 +421,13 @@ export function hasLook(look: string | undefined): look is string {
   return Boolean(look && LOOKS[look]);
 }
 
-export function drawCreature(ctx: Ctx, look: string, t: number, moving: boolean, dir: number, size: number, flash: number) {
+export function drawCreature(ctx: Ctx, look: string, t: number, moving: boolean, dir: number, size: number, flash: number, atk = -1) {
   const fn = LOOKS[look];
   if (!fn) return;
   const { c } = scratch();
   const f = Math.max(0.7, size / 66);
   if (dir === 1) c.scale(-1, 1);
-  fn({ c, f, t, m: moving ? 1 : 0, v: dir === 3 ? "b" : dir === 0 ? "f" : "s" });
+  fn({ c, f, t, m: moving ? 1 : 0, v: dir === 3 ? "b" : dir === 0 ? "f" : "s", atk });
   castShadowScratch(ctx);
   blitScratch(ctx, flash);
 }

@@ -306,3 +306,48 @@ export function castShadowScratch(ctx: Ctx, alpha = 0.26, len = 0.32) {
   ctx.drawImage(shCv, -(SCR_W / 2) * PX, -(SCR_H - 4) * PX, SCR_W * PX, SCR_H * PX);
   ctx.restore();
 }
+
+// ── Shared pixel-art limb helpers ──
+export const rad = (d: number) => (d * Math.PI) / 180;
+export const lerp = (a: number, b: number, t: number) => a + (b - a) * Math.max(0, Math.min(1, t));
+export const ease = (t: number) => t * t * (3 - 2 * t);
+
+/** A straight run of 1-texel squares along an angle (pixel-art rotation, no smear). */
+export function line(c: Ctx, x: number, y: number, ang: number, len: number, w: number, col: string, xs = 1, from = 0) {
+  const dx = Math.cos(rad(ang)) * xs;
+  const dy = Math.sin(rad(ang));
+  c.fillStyle = col;
+  for (let i = from; i < len; i++) c.fillRect(Math.round(x + dx * i - w / 2), Math.round(y + dy * i - w / 2), w, w);
+}
+
+/** Straight arm/leg pivoting at (sx,sy); `split` is the fraction in colour A. */
+export function limbPx(c: Ctx, sx: number, sy: number, ang: number, len: number, wid: number, a: string, b: string, split: number, xs = 1) {
+  const dx = Math.cos(rad(ang)) * xs;
+  const dy = Math.sin(rad(ang));
+  for (let i = 0; i < len; i++) {
+    const col = i < len * split ? a : b;
+    const x = Math.round(sx + dx * i - wid / 2);
+    const y = Math.round(sy + dy * i);
+    c.fillStyle = col;
+    c.fillRect(x, y, wid, Math.max(1, Math.ceil(Math.abs(dy)) + 1));
+  }
+  // darker outline on the trailing edge for the blocky bevel
+  c.fillStyle = "rgba(0,0,0,0.16)";
+  c.fillRect(Math.round(sx + dx * (len - 1) - wid / 2), Math.round(sy + dy * (len - 1)) + 1, wid, 1);
+}
+
+/** Attack progress 0..1 -> arm angle, weapon bend, body lunge. */
+export function atkPose(a: number) {
+  if (a < 0) return { ang: 90, bend: 1, lunge: 0 };
+  if (a < 0.3) {
+    const e = ease(a / 0.3);
+    return { ang: lerp(90, -125, e), bend: 1 - e, lunge: -1 * e };
+  }
+  if (a < 0.55) {
+    const e = ease((a - 0.3) / 0.25);
+    return { ang: lerp(-125, 25, e), bend: 0, lunge: lerp(-1, 2, e) };
+  }
+  const e = ease((a - 0.55) / 0.45);
+  return { ang: lerp(25, 90, e), bend: e, lunge: lerp(2, 0, e) };
+}
+

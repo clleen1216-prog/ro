@@ -85,12 +85,49 @@ function drawActor(
   oy = 0,
   atk = -1,
   parts?: ActorParts,
+  turn = 0,
 ) {
   shadow(ctx, x, y, 10);
   ctx.save();
   ctx.translate(Math.round(x + ox), Math.round(y + oy));
-  drawBlockActor(ctx, dir, phase, amt, style, hairHex(hair), trimHex(trim), parts ?? partsFromEq(eq), sit, flash, atk, world.time);
+  drawBlockActor(ctx, dir, phase, amt, style, hairHex(hair), trimHex(trim), parts ?? partsFromEq(eq), sit, flash, atk, world.time, turn);
   ctx.restore();
+}
+
+
+// 8-direction facing: derived from movement (or the attack target) and remembered.
+const F_DIR: { dir: Dir; turn: number }[] = [
+  { dir: 2, turn: 0 },
+  { dir: 0, turn: 1 },
+  { dir: 0, turn: 0 },
+  { dir: 0, turn: -1 },
+  { dir: 1, turn: 0 },
+  { dir: 3, turn: -1 },
+  { dir: 3, turn: 0 },
+  { dir: 3, turn: 1 },
+];
+const DIR_F = [2, 4, 0, 6];
+const faceMem = new Map<string, { x: number; y: number; f: number }>();
+const sector = (a: number) => ((Math.round(a / (Math.PI / 4)) % 8) + 8) % 8;
+
+function face8(key: string, x: number, y: number, dir: Dir, aim?: { x: number; y: number } | null) {
+  let m = faceMem.get(key);
+  if (!m) {
+    m = { x, y, f: DIR_F[dir]! };
+    faceMem.set(key, m);
+  }
+  const vx = x - m.x;
+  const vy = y - m.y;
+  m.x = x;
+  m.y = y;
+  if (aim) m.f = sector(Math.atan2(aim.y - y, aim.x - x));
+  else if (Math.hypot(vx, vy) > 0.35) m.f = sector(Math.atan2(vy, vx));
+  else {
+    const cur = F_DIR[m.f]!;
+    const ok = cur.dir === dir || (cur.turn !== 0 && (m.f === 1 ? dir === 2 : m.f === 3 ? dir === 1 : m.f === 5 ? dir === 1 : dir === 2));
+    if (!ok) m.f = DIR_F[dir]!;
+  }
+  return F_DIR[m.f]!;
 }
 
 const iconCache = new Map<string, HTMLCanvasElement>();
@@ -402,7 +439,7 @@ function drawMonster(
   y: number,
   flash: number,
   moving: boolean,
-  fx: { scaleX?: number; scaleY?: number; alpha?: number; lift?: number; rot?: number } = {},
+  fx: { scaleX?: number; scaleY?: number; alpha?: number; lift?: number; rot?: number; atk?: number } = {},
 ) {
   const def = MONSTERS[kind];
   if (!def) return;
@@ -416,7 +453,7 @@ function drawMonster(
     ctx.translate(Math.round(x), Math.round(y - (fx.lift ?? 0) - flyBob));
     if (fx.rot) ctx.rotate(fx.rot);
     ctx.scale(fx.scaleX ?? 1, fx.scaleY ?? 1);
-    drawCreature(ctx, def.look, t, moving, dir, h, flash);
+    drawCreature(ctx, def.look, t, moving, dir, h, flash, fx.atk ?? -1);
   }
   ctx.restore();
 }
@@ -710,7 +747,9 @@ export function renderFrame(canvas: HTMLCanvasElement, dt: number) {
         }
         const pop = m.spawnT > 0 ? 1 - m.spawnT / 0.5 : 1;
         const e = pop < 1 ? 1 - Math.pow(1 - pop, 3) : 1;
+        const matk = m.windup > 0 ? 0.3 * (1 - m.windup / 0.28) : m.lunge > 0 ? 0.3 + 0.25 * (1 - m.lunge / 0.2) : -1;
         drawMonster(ctx, m.kind, m.dir, m.anim, lx, ly, m.hurt, m.moving, {
+          atk: matk,
           scaleX: sxs * (0.4 + 0.6 * e) * (1 + (m.hurt > 0 ? 0.08 : 0)),
           scaleY: sys * (0.4 + 0.6 * e) * (1 - (m.hurt > 0 ? 0.08 : 0)),
           alpha: Math.min(1, 0.3 + e),
@@ -782,7 +821,9 @@ export function renderFrame(canvas: HTMLCanvasElement, dt: number) {
         const down = p.downFor > 0;
         ctx.save();
         if (down || p.feign > 0) ctx.globalAlpha = down ? 0.5 : 0.72;
-        drawActor(ctx, p.x, p.y, p.dir, phase, amt, p.style, p.hair, p.trim, p.eq, p.sit || p.feign > 0 || down, p.flash, 0, 0, atk);
+        const tg = p.swing > 0 ? world.monsters.find((mm) => mm.id === world.targetId && mm.alive) : undefined;
+        const fc = face8("player", p.x, p.y, p.dir, tg ?? null);
+        drawActor(ctx, p.x, p.y, fc.dir, phase, amt, p.style, p.hair, p.trim, p.eq, p.sit || p.feign > 0 || down, p.flash, 0, 0, atk, undefined, fc.turn);
         ctx.restore();
         if (down) return;
         label(ctx, p.name, p.x, p.y - 112, "#fff6df");

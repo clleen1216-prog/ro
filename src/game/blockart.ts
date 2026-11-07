@@ -1,7 +1,7 @@
 // Block (Minecraft-style) props, buildings and the humanoid actor.
 // All painted in texel space — see blocky.ts.
 
-import { B, PX, blit, blitScratch, castShadowScratch, hash, mk, scratch, shade, sprite } from "@/game/blocky";
+import { B, PX, atkPose, blit, blitScratch, castShadowScratch, hash, lerp, limbPx, line, mk, rad, scratch, shade, sprite } from "@/game/blocky";
 
 type Ctx = CanvasRenderingContext2D;
 
@@ -315,18 +315,6 @@ function headgear(c: Ctx, p: ActorParts, dir: number) {
   }
 }
 
-const rad = (d: number) => (d * Math.PI) / 180;
-const lerp = (a: number, b: number, t: number) => a + (b - a) * Math.max(0, Math.min(1, t));
-const ease = (t: number) => t * t * (3 - 2 * t);
-
-/** A straight run of 1-texel squares along an angle (pixel-art rotation, no smear). */
-function line(c: Ctx, x: number, y: number, ang: number, len: number, w: number, col: string, xs = 1, from = 0) {
-  const dx = Math.cos(rad(ang)) * xs;
-  const dy = Math.sin(rad(ang));
-  c.fillStyle = col;
-  for (let i = from; i < len; i++) c.fillRect(Math.round(x + dx * i - w / 2), Math.round(y + dy * i - w / 2), w, w);
-}
-
 function weapon(c: Ctx, w: NonNullable<ActorParts["weapon"]>, x: number, y: number, ang: number, xs: number) {
   const kind = w.weapon;
   const hi = shade(w.tint, 0.3);
@@ -358,37 +346,6 @@ function shield(c: Ctx, s: NonNullable<ActorParts["shield"]>, x: number, y: numb
   B(c, x + 2, y + 1, 1, 6, shade(s.tint, 0.3), 0, false);
 }
 
-/** Straight arm/leg pivoting at (sx,sy); `split` is the fraction in colour A. */
-function limbPx(c: Ctx, sx: number, sy: number, ang: number, len: number, wid: number, a: string, b: string, split: number, xs = 1) {
-  const dx = Math.cos(rad(ang)) * xs;
-  const dy = Math.sin(rad(ang));
-  for (let i = 0; i < len; i++) {
-    const col = i < len * split ? a : b;
-    const x = Math.round(sx + dx * i - wid / 2);
-    const y = Math.round(sy + dy * i);
-    c.fillStyle = col;
-    c.fillRect(x, y, wid, Math.max(1, Math.ceil(Math.abs(dy)) + 1));
-  }
-  // darker outline on the trailing edge for the blocky bevel
-  c.fillStyle = "rgba(0,0,0,0.16)";
-  c.fillRect(Math.round(sx + dx * (len - 1) - wid / 2), Math.round(sy + dy * (len - 1)) + 1, wid, 1);
-}
-
-/** Attack progress 0..1 -> arm angle, weapon bend, body lunge. */
-function atkPose(a: number) {
-  if (a < 0) return { ang: 90, bend: 1, lunge: 0 };
-  if (a < 0.3) {
-    const e = ease(a / 0.3);
-    return { ang: lerp(90, -125, e), bend: 1 - e, lunge: -1 * e };
-  }
-  if (a < 0.55) {
-    const e = ease((a - 0.3) / 0.25);
-    return { ang: lerp(-125, 25, e), bend: 0, lunge: lerp(-1, 2, e) };
-  }
-  const e = ease((a - 0.55) / 0.45);
-  return { ang: lerp(25, 90, e), bend: e, lunge: lerp(2, 0, e) };
-}
-
 const REST: Record<string, number> = { sword: -55, dagger: -40, staff: -85, bow: -90 };
 
 /**
@@ -409,6 +366,7 @@ export function drawBlockActor(
   flash: number,
   atk: number,
   time: number,
+  turn = 0,
 ) {
   const { c } = scratch();
   const side = dir === 1 || dir === 2;
@@ -426,56 +384,74 @@ export function drawBlockActor(
   const shoe = parts.shoes?.tint ?? "#4a4a52";
 
   if (!side) {
-    // ── front / back ──
+    // ── front / back (turn = -1/0/+1 gives the 3/4 diagonal views) ──
+    const tn = turn;
     const lh = sit ? 6 : 12;
     const liftL = sit ? 0 : Math.round(Math.max(0, s) * 2.2);
     const liftR = sit ? 0 : Math.round(Math.max(0, -s) * 2.2);
-    B(c, -4, -lh - liftL, 4, lh, PANTS, 0.1);
-    B(c, 0, -lh - liftR, 4, lh, shade(PANTS, -0.06), 0.1);
-    B(c, -4, -3 - liftL, 4, 3, shoe, 0.1);
-    B(c, 0, -3 - liftR, 4, 3, shoe, 0.1);
+    const stride = tn && !sit ? Math.round(s * 2) * tn : 0;
+    B(c, -4 + tn + Math.max(0, -stride), -lh - liftL, 4, lh, PANTS, 0.1);
+    B(c, 0 + tn + Math.min(0, -stride), -lh - liftR, 4, lh, shade(PANTS, -0.06), 0.1);
+    B(c, -4 + tn + Math.max(0, -stride), -3 - liftL, 4, 3, shoe, 0.1);
+    B(c, 0 + tn + Math.min(0, -stride), -3 - liftR, 4, 3, shoe, 0.1);
     c.save();
     c.translate(0, sy + yb + idle);
-    // cape (behind the body from the front)
-    B(c, -4, -24, 8, 12, shirt, 0.12);
-    B(c, -4, -14, 8, 2, shade(shirt, -0.3), 0, false);
-    if (parts.armor) {
-      B(c, -3, -23, 6, 1, shade(shirt, 0.25), 0, false);
-      B(c, -1, -20, 2, 6, shade(shirt, 0.15), 0, false);
-    }
-    const xs = 0.35;
-    const armL = sit ? 90 : 90 + s * 14;
+    const nearX = tn * 5;
+    const farX = -tn * 2;
+    const wpnX = tn === 0 ? (front ? 6 : -6) : front ? (tn > 0 ? nearX : farX) : tn > 0 ? farX : nearX;
+    const othX = tn === 0 ? (front ? -6 : 6) : front ? (tn > 0 ? farX : nearX) : tn > 0 ? nearX : farX;
+    const xs = tn ? 0.7 : 0.35;
+    const armO = sit ? 90 : 90 + s * 14;
     const rightAng = atk >= 0 ? pose.ang : sit ? 90 : 90 - s * 14;
-    const lx = front ? -6 : 6;
-    const rx = front ? 6 : -6;
-    limbPx(c, lx, -23, armL, 9, 4, shirt, SKIN, 0.4, xs);
-    limbPx(c, rx, -23, rightAng, 9, 4, shirt, SKIN, 0.4, xs);
-    if (parts.garment) {
-      if (dir === 3) B(c, -4, -24, 8, 19 + Math.round(amt), parts.garment.tint, 0.14);
-      else B(c, -5, -24, 10, 2, parts.garment.tint, 0.1);
+    const wpnIsNear = tn === 0 || (front ? tn > 0 : tn < 0);
+    // far arm tucks behind the torso on diagonals
+    if (tn) limbPx(c, wpnIsNear ? othX : wpnX, -23, wpnIsNear ? armO : rightAng, 9, 3, shade(shirt, -0.2), shade(SKIN, -0.12), 0.4, xs);
+    const tw = tn ? 6 : 8;
+    const tx0 = tn ? -3 + tn : -4;
+    B(c, tx0, -24, tw, 12, shirt, 0.12);
+    B(c, tx0, -14, tw, 2, shade(shirt, -0.3), 0, false);
+    if (parts.armor) {
+      B(c, tx0 + 1, -23, tw - 2, 1, shade(shirt, 0.25), 0, false);
+      B(c, tx0 + tw / 2 - 1, -20, 2, 6, shade(shirt, 0.15), 0, false);
     }
+    if (tn) {
+      limbPx(c, wpnIsNear ? wpnX : othX, -23, wpnIsNear ? rightAng : armO, 9, 4, shirt, SKIN, 0.4, xs);
+    } else {
+      limbPx(c, othX, -23, armO, 9, 4, shirt, SKIN, 0.4, xs);
+      limbPx(c, wpnX, -23, rightAng, 9, 4, shirt, SKIN, 0.4, xs);
+    }
+    if (parts.garment) {
+      if (dir === 3) B(c, tx0, -24, tw, 19 + Math.round(amt), parts.garment.tint, 0.14);
+      else B(c, tx0 - 1, -24, tw + 2, 2, parts.garment.tint, 0.1);
+    }
+    c.save();
+    c.translate(tn, 0);
     if (parts.lower?.hat === "scarf" && dir === 3) B(c, -5, -25, 10, 2, parts.lower.tint, 0.1, false);
     B(c, -4, -32, 8, 8, SKIN, 0.1);
     B(c, -4, -25, 8, 1, SKIN_D, 0, false);
     if (front) {
+      const e0 = tn * 1;
       c.fillStyle = "#ffffff";
-      c.fillRect(-3, -29, 2, 1);
-      c.fillRect(1, -29, 2, 1);
+      if (tn <= 0) c.fillRect(-3 + e0, -29, tn < 0 ? 2 : 2, 1);
+      else c.fillRect(-2 + e0, -29, 1, 1);
+      if (tn >= 0) c.fillRect(1 + e0, -29, 2, 1);
+      else c.fillRect(1 + e0, -29, 1, 1);
       c.fillStyle = "#3a2a4a";
-      c.fillRect(-2, -29, 1, 1);
-      c.fillRect(1, -29, 1, 1);
+      if (tn <= 0) c.fillRect(-2 + e0 + (tn < 0 ? -1 : 0), -29, 1, 1);
+      if (tn >= 0) c.fillRect(1 + e0 + (tn > 0 ? 1 : 0), -29, 1, 1);
       c.fillStyle = "#b8704a";
-      c.fillRect(-1, -26, 2, 1);
+      c.fillRect(-1 + e0 * 2, -26, 2, 1);
     }
     hair(c, style, hairCol, dir);
     headgear(c, parts, dir);
+    c.restore();
     if (parts.weapon) {
-      const ex = rx + Math.cos(rad(rightAng)) * 9 * xs;
+      const ex = wpnX + Math.cos(rad(rightAng)) * 9 * xs;
       const ey = -23 + Math.sin(rad(rightAng)) * 9;
-      weapon(c, parts.weapon, ex, ey, rightAng + (restAng - 90) * (atk >= 0 ? pose.bend : 1) , 0.35);
+      weapon(c, parts.weapon, ex, ey, rightAng + (restAng - 90) * (atk >= 0 ? pose.bend : 1), xs);
     }
-    if (parts.shield) shield(c, parts.shield, front ? -10 : 5, -21);
-    if (parts.acc && front) B(c, -1, -21, 2, 2, parts.acc, 0, false);
+    if (parts.shield) shield(c, parts.shield, (front ? -10 : 5) + (tn ? tn * 2 : 0), -21);
+    if (parts.acc && front) B(c, -1 + tn * 2, -21, 2, 2, parts.acc, 0, false);
     c.restore();
   } else {
     // ── side view, facing right ──
