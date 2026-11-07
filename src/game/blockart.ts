@@ -241,117 +241,197 @@ export function buildingSprite(kind: string, w: number, h: number, hue?: string)
   });
 }
 
-// ── Humanoid actor ──────────────────────────────────────────────────────
+// ── Chibi humanoid actor ────────────────────────────────────────────────
+// Big-head proportions: legs 7, torso 8, head 12 wide x 11 tall (~28 texels).
+
+const IRIS = "#3b3a8c";
 
 function hair(c: Ctx, style: string, hx: string, dir: number) {
-  const hd = shade(hx, -0.12);
+  const hd = shade(hx, -0.16);
+  const hl = shade(hx, 0.22);
+  const bob = style === "bob";
+  const swept = style === "swept";
   if (dir === 3) {
-    B(c, -4, -32, 8, 8, hx, 0.14);
-    if (style === "bob") B(c, -4, -24, 8, 3, hx, 0.14);
+    B(c, -7, -28, 14, bob ? 14 : swept ? 11 : 9, hx, 0.14);
+    B(c, -5, -27, 6, 1, hl, 0, false);
+    B(c, -7, bob ? -15 : swept ? -18 : -20, 14, 1, hd, 0, false);
+    if (style === "short") B(c, -3, -30, 3, 2, hx, 0.14, false);
     return;
   }
   if (dir === 0) {
-    B(c, -4, -32, 8, 3, hx, 0.14);
-    if (style === "bob") {
-      B(c, -4, -29, 1, 6, hx, 0.14, false);
-      B(c, 3, -29, 1, 6, hx, 0.14, false);
-      B(c, -3, -29, 6, 1, hd, 0.1, false);
+    B(c, -7, -28, 14, 4, hx, 0.14);
+    B(c, -5, -27, 6, 1, hl, 0, false);
+    if (bob) {
+      B(c, -7, -24, 2, 10, hx, 0.14, false);
+      B(c, 5, -24, 2, 10, hx, 0.14, false);
+      B(c, -5, -24, 4, 2, hx, 0.14, false);
+      B(c, 1, -24, 4, 2, hx, 0.14, false);
+      B(c, -5, -22, 2, 1, hx, 0, false);
+      B(c, 3, -22, 2, 1, hx, 0, false);
+      B(c, -1, -24, 2, 1, hd, 0, false);
     } else if (style === "short") {
-      B(c, -4, -29, 1, 2, hx, 0.14, false);
-      B(c, 3, -29, 1, 2, hx, 0.14, false);
+      B(c, -7, -24, 1, 4, hx, 0.14, false);
+      B(c, 6, -24, 1, 4, hx, 0.14, false);
+      B(c, -6, -24, 12, 1, hx, 0.14, false);
+      B(c, -3, -30, 3, 2, hx, 0.14, false);
+      B(c, 1, -29, 3, 1, hl, 0, false);
+      B(c, -4, -23, 2, 1, hx, 0, false);
+      B(c, 2, -23, 2, 1, hx, 0, false);
     } else {
-      B(c, -4, -29, 4, 1, hx, 0.14, false);
-      B(c, -4, -29, 1, 3, hx, 0.14, false);
-      B(c, 3, -29, 1, 2, hx, 0.14, false);
+      B(c, -7, -24, 2, 8, hx, 0.14, false);
+      B(c, 5, -24, 2, 4, hx, 0.14, false);
+      B(c, -6, -24, 9, 3, hx, 0.14, false);
+      B(c, 3, -24, 3, 1, hx, 0.14, false);
+      B(c, -3, -22, 3, 1, hx, 0, false);
+      B(c, 2, -31, 1, 3, hx, 0, false);
     }
     return;
   }
   // side (facing right)
-  B(c, -4, -32, 8, 3, hx, 0.14);
-  B(c, -4, -29, 3, style === "bob" ? 7 : style === "swept" ? 5 : 3, hx, 0.14);
-  if (style === "swept") B(c, 2, -30, 2, 2, hx, 0.14, false);
+  B(c, -7, -28, 14, 4, hx, 0.14);
+  B(c, -5, -27, 6, 1, hl, 0, false);
+  B(c, -7, -24, 6, bob ? 10 : swept ? 7 : 4, hx, 0.14);
+  B(c, 1, -24, 5, bob ? 2 : 1, hx, 0.14, false);
+  if (bob) B(c, 3, -22, 2, 1, hx, 0, false);
+  if (swept) {
+    B(c, 4, -23, 3, 2, hx, 0.14, false);
+    B(c, 1, -31, 1, 3, hx, 0, false);
+  }
+  if (style === "short") B(c, 0, -30, 3, 2, hx, 0.14, false);
+}
+
+function face(c: Ctx, dir: number, tn: number) {
+  const eye = (x: number) => {
+    B(c, x, -22, 2, 3, "#2a2440", 0, false);
+    c.fillStyle = IRIS;
+    c.fillRect(x, -20, 2, 1);
+    c.fillStyle = "#ffffff";
+    c.fillRect(x, -22, 1, 1);
+  };
+  c.fillStyle = "#f0908a";
+  if (dir === 0) {
+    const e = tn;
+    if (tn <= 0) eye(-4 + e);
+    else {
+      B(c, -3 + e, -22, 1, 3, "#2a2440", 0, false);
+    }
+    if (tn >= 0) eye(2 + e);
+    else B(c, 2 + e, -22, 1, 3, "#2a2440", 0, false);
+    c.fillStyle = "#f2988f";
+    c.fillRect(-5 + e, -18, 2, 1);
+    c.fillRect(3 + e, -18, 2, 1);
+    c.fillStyle = "#7a5a46";
+    c.fillRect(-4 + e, -23, 2, 1);
+    c.fillRect(2 + e, -23, 2, 1);
+    c.fillStyle = "#a8584a";
+    c.fillRect(-1 + e, -17, 2, 1);
+  } else {
+    eye(2);
+    c.fillStyle = "#f2988f";
+    c.fillRect(3, -18, 2, 1);
+    c.fillStyle = "#7a5a46";
+    c.fillRect(2, -23, 2, 1);
+    c.fillStyle = "#a8584a";
+    c.fillRect(4, -17, 2, 1);
+  }
 }
 
 function headgear(c: Ctx, p: ActorParts, dir: number) {
+  const side = dir === 1 || dir === 2;
   const u = p.upper;
   if (u?.hat === "cap" || u?.hat === "feather") {
-    B(c, -5, -35, 10, 4, u.tint, 0.1);
-    if (dir !== 3) B(c, dir === 0 ? -5 : 1, -31, dir === 0 ? 10 : 5, 1, shade(u.tint, -0.2), 0, false);
+    B(c, -7, -30, 14, 5, u.tint, 0.1);
+    if (dir === 0) B(c, -7, -25, 14, 1, shade(u.tint, -0.3), 0, false);
+    else if (side) B(c, 2, -25, 7, 1, shade(u.tint, -0.3), 0, false);
     if (u.hat === "feather") {
-      B(c, 3, -40, 1, 6, "#e4b15a", 0, false);
-      B(c, 4, -39, 1, 3, "#f6d68a", 0, false);
+      B(c, 4, -36, 1, 7, "#e4b15a", 0, false);
+      B(c, 5, -35, 1, 4, "#f6d68a", 0, false);
     }
   } else if (u?.hat === "circlet") {
-    B(c, -5, -31, 10, 1, u.tint, 0, false);
-    if (dir === 0) B(c, -1, -32, 2, 2, "#fff", 0, false);
+    B(c, -7, -24, 14, 1, u.tint, 0, false);
+    if (dir === 0) B(c, -1, -26, 2, 3, "#ffffff", 0, false);
   } else if (u?.hat === "brim") {
-    B(c, -8, -31, 16, 2, u.tint, 0.1);
-    B(c, -4, -36, 8, 5, shade(u.tint, 0.05), 0.1);
+    B(c, -11, -26, 22, 2, u.tint, 0.1);
+    B(c, -5, -33, 10, 7, shade(u.tint, 0.05), 0.1);
+    B(c, -5, -28, 10, 1, shade(u.tint, -0.3), 0, false);
   }
   const m = p.mid;
   if (m?.hat === "glasses" && dir !== 3) {
     c.fillStyle = m.tint;
     if (dir === 0) {
-      c.fillRect(-4, -29, 3, 1);
-      c.fillRect(1, -29, 3, 1);
-      c.fillRect(-4, -28, 1, 1);
-      c.fillRect(-1, -28, 1, 1);
-      c.fillRect(1, -28, 1, 1);
-      c.fillRect(3, -28, 1, 1);
-      c.fillRect(-1, -29, 2, 1);
+      c.fillRect(-5, -23, 5, 1);
+      c.fillRect(-5, -19, 5, 1);
+      c.fillRect(-5, -22, 1, 3);
+      c.fillRect(-1, -22, 1, 3);
+      c.fillRect(1, -23, 5, 1);
+      c.fillRect(1, -19, 5, 1);
+      c.fillRect(1, -22, 1, 3);
+      c.fillRect(5, -22, 1, 3);
+      c.fillRect(0, -21, 1, 1);
     } else {
-      c.fillRect(0, -29, 4, 1);
-      c.fillRect(0, -28, 1, 1);
-      c.fillRect(3, -28, 1, 1);
+      c.fillRect(1, -23, 5, 1);
+      c.fillRect(1, -19, 5, 1);
+      c.fillRect(1, -22, 1, 3);
+      c.fillRect(5, -22, 1, 3);
+      c.fillRect(-6, -22, 7, 1);
     }
   } else if (m?.hat === "mask" && dir !== 3) {
-    B(c, dir === 0 ? -4 : 0, -29, dir === 0 ? 8 : 4, 2, m.tint, 0, false);
+    B(c, dir === 0 ? -6 : 0, -23, dir === 0 ? 12 : 6, 4, m.tint, 0, false);
+    c.fillStyle = "#fff";
+    if (dir === 0) {
+      c.fillRect(-4, -22, 2, 1);
+      c.fillRect(2, -22, 2, 1);
+    } else c.fillRect(2, -22, 2, 1);
   }
   const l = p.lower;
-  if (l?.hat === "scarf") B(c, -5, -25, 10, 2, l.tint, 0.1, false);
   if (l?.hat === "ribbon") {
-    B(c, -7, -30, 3, 3, l.tint, 0, false);
-    B(c, 4, -30, 3, 3, l.tint, 0, false);
+    if (dir === 0 || dir === 3) {
+      B(c, -10, -25, 4, 4, l.tint, 0.1);
+      B(c, 6, -25, 4, 4, l.tint, 0.1);
+    } else B(c, -9, -25, 4, 4, l.tint, 0.1);
   }
 }
 
 function weapon(c: Ctx, w: NonNullable<ActorParts["weapon"]>, x: number, y: number, ang: number, xs: number) {
   const kind = w.weapon;
   const hi = shade(w.tint, 0.3);
+  const ca = Math.cos(rad(ang));
+  const sa = Math.sin(rad(ang));
   if (kind === "bow") {
-    line(c, x, y + 7, -90, 15, 1, "#7a5632", xs);
-    line(c, x + 2 * xs, y + 7, -90, 15, 1, "#e6e6e6", xs);
+    line(c, x, y + 8, -90, 18, 1, "#7a5632", xs);
+    line(c, x + 2 * xs, y + 8, -90, 18, 1, "#e6e6e6", xs);
     c.fillStyle = w.tint;
-    c.fillRect(Math.round(x), Math.round(y - 8), 1, 1);
+    c.fillRect(Math.round(x), Math.round(y - 10), 1, 2);
   } else if (kind === "staff") {
-    line(c, x - Math.cos(rad(ang)) * 6 * xs, y - Math.sin(rad(ang)) * 6, ang, 30, 2, "#7a5632", xs);
-    const tx = x + Math.cos(rad(ang)) * 23 * xs;
-    const ty = y + Math.sin(rad(ang)) * 23;
-    B(c, tx - 2, ty - 2, 4, 4, w.tint, 0.1);
+    line(c, x - ca * 7 * xs, y - sa * 7, ang, 36, 2, "#7a5632", xs);
+    const tx = x + ca * 28 * xs;
+    const ty = y + sa * 28;
+    B(c, tx - 3, ty - 3, 6, 6, w.tint, 0.1);
     c.fillStyle = "#fff";
-    c.fillRect(Math.round(tx - 1), Math.round(ty - 1), 1, 1);
+    c.fillRect(Math.round(tx - 2), Math.round(ty - 2), 2, 1);
   } else {
-    const len = kind === "dagger" ? 8 : 15;
-    line(c, x, y, ang, 3, 2, "#5c3a28", xs, 0);
-    const gx = x + Math.cos(rad(ang)) * 3 * xs;
-    const gy = y + Math.sin(rad(ang)) * 3;
-    line(c, gx - Math.cos(rad(ang + 90)) * 2 * xs, gy - Math.sin(rad(ang + 90)) * 2, ang + 90, 5, 1, "#d2a23a", xs);
-    line(c, gx, gy, ang, len, 2, "#d6dce4", xs, 0);
+    const len = kind === "dagger" ? 10 : 18;
+    line(c, x, y, ang, 4, 2, "#5c3a28", xs, 0);
+    const gx = x + ca * 4 * xs;
+    const gy = y + sa * 4;
+    line(c, gx - Math.cos(rad(ang + 90)) * 3 * xs, gy - Math.sin(rad(ang + 90)) * 3, ang + 90, 7, 1, "#d2a23a", xs);
+    line(c, gx, gy, ang, len, 3, "#cfd6de", xs, 0);
     line(c, gx, gy, ang, len, 1, kind === "dagger" ? "#eef2f6" : hi, xs, 1);
   }
 }
 
 function shield(c: Ctx, s: NonNullable<ActorParts["shield"]>, x: number, y: number) {
-  B(c, x, y, 5, 8, s.tint, 0.1);
-  B(c, x + 2, y + 1, 1, 6, shade(s.tint, 0.3), 0, false);
+  B(c, x, y, 6, 9, s.tint, 0.1);
+  B(c, x + 2, y + 1, 2, 7, shade(s.tint, 0.3), 0, false);
 }
 
 const REST: Record<string, number> = { sword: -55, dagger: -40, staff: -85, bow: -90 };
 
 /**
  * Paint the player/NPC into the scratch buffer and blit it with the feet at the
- * current transform origin. dir: 0 front, 1 left, 2 right, 3 back.
- * phase = walk cycle in radians, amt = 0..1 movement, atk = attack progress (or -1).
+ * current transform origin. dir: 0 front, 1 left, 2 right, 3 back; turn = -1/+1
+ * gives the 3/4 diagonal views. phase = walk cycle (radians), amt = 0..1 movement,
+ * atk = attack progress (or -1).
  */
 export function drawBlockActor(
   ctx: Ctx,
@@ -373,123 +453,121 @@ export function drawBlockActor(
   const front = dir === 0;
   const s = sit ? 0 : Math.sin(phase) * amt;
   const shirt = parts.armor ? parts.armor.tint : trimCol;
-  const sy = sit ? 6 : 0;
+  const sy = sit ? 4 : 0;
   const pose = atkPose(atk);
   const idle = Math.sin(time * 2.2) > 0.8 && amt < 0.1 ? 1 : 0;
-  const yb = sit ? 0 : -Math.round(Math.abs(Math.cos(phase)) * amt * 1.1) + (amt < 0.1 ? 0 : 0);
+  const yb = sit ? 0 : -Math.round(Math.abs(Math.cos(phase)) * amt * 1.2);
   const lunge = Math.round(pose.lunge);
   const wk = parts.weapon?.weapon ?? "sword";
   const restAng = REST[wk] ?? -55;
+  const shoe = parts.shoes?.tint ?? "#5a4632";
+  const LH = sit ? 4 : 7;
   if (dir === 1) c.scale(-1, 1);
-  const shoe = parts.shoes?.tint ?? "#4a4a52";
+
+  const belt = (x: number, w: number) => {
+    B(c, x, -8, w, 1, "#3a2818", 0, false);
+    if (w > 5) B(c, x + Math.floor(w / 2) - 1, -8, 2, 1, "#e4b15a", 0, false);
+  };
 
   if (!side) {
-    // ── front / back (turn = -1/0/+1 gives the 3/4 diagonal views) ──
     const tn = turn;
-    const lh = sit ? 6 : 12;
     const liftL = sit ? 0 : Math.round(Math.max(0, s) * 2.2);
     const liftR = sit ? 0 : Math.round(Math.max(0, -s) * 2.2);
     const stride = tn && !sit ? Math.round(s * 2) * tn : 0;
-    B(c, -4 + tn + Math.max(0, -stride), -lh - liftL, 4, lh, PANTS, 0.1);
-    B(c, 0 + tn + Math.min(0, -stride), -lh - liftR, 4, lh, shade(PANTS, -0.06), 0.1);
-    B(c, -4 + tn + Math.max(0, -stride), -3 - liftL, 4, 3, shoe, 0.1);
-    B(c, 0 + tn + Math.min(0, -stride), -3 - liftR, 4, 3, shoe, 0.1);
+    const lxA = -4 + tn + Math.max(0, -stride);
+    const lxB = 0 + tn + Math.min(0, -stride);
+    B(c, lxA, -LH - liftL, 4, LH - 2, PANTS, 0.1);
+    B(c, lxB, -LH - liftR, 4, LH - 2, shade(PANTS, -0.06), 0.1);
+    B(c, lxA, -2 - liftL, 4, 2, shoe, 0.1);
+    B(c, lxB, -2 - liftR, 4, 2, shoe, 0.1);
+    if (front) {
+      B(c, lxA, -1 - liftL, 5, 1, shade(shoe, -0.25), 0, false);
+      B(c, lxB, -1 - liftR, 5, 1, shade(shoe, -0.25), 0, false);
+    }
     c.save();
     c.translate(0, sy + yb + idle);
-    const nearX = tn * 5;
-    const farX = -tn * 2;
-    const wpnX = tn === 0 ? (front ? 6 : -6) : front ? (tn > 0 ? nearX : farX) : tn > 0 ? farX : nearX;
-    const othX = tn === 0 ? (front ? -6 : 6) : front ? (tn > 0 ? farX : nearX) : tn > 0 ? nearX : farX;
+    const nearX = tn * 5.5;
+    const farX = -tn * 2.5;
+    const wpnX = tn === 0 ? (front ? 5.5 : -5.5) : front ? (tn > 0 ? nearX : farX) : tn > 0 ? farX : nearX;
+    const othX = tn === 0 ? (front ? -5.5 : 5.5) : front ? (tn > 0 ? farX : nearX) : tn > 0 ? nearX : farX;
     const xs = tn ? 0.7 : 0.35;
     const armO = sit ? 90 : 90 + s * 14;
     const rightAng = atk >= 0 ? pose.ang : sit ? 90 : 90 - s * 14;
     const wpnIsNear = tn === 0 || (front ? tn > 0 : tn < 0);
-    // far arm tucks behind the torso on diagonals
-    if (tn) limbPx(c, wpnIsNear ? othX : wpnX, -23, wpnIsNear ? armO : rightAng, 9, 3, shade(shirt, -0.2), shade(SKIN, -0.12), 0.4, xs);
+    if (tn) limbPx(c, wpnIsNear ? othX : wpnX, -14, wpnIsNear ? armO : rightAng, 8, 3, shade(shirt, -0.2), shade(SKIN, -0.12), 0.45, xs);
     const tw = tn ? 6 : 8;
     const tx0 = tn ? -3 + tn : -4;
-    B(c, tx0, -24, tw, 12, shirt, 0.12);
-    B(c, tx0, -14, tw, 2, shade(shirt, -0.3), 0, false);
+    B(c, tx0, -15, tw, 8, shirt, 0.12);
+    B(c, tx0, -9, tw, 2, shade(shirt, -0.18), 0.08, false);
+    belt(tx0, tw);
+    if (front) {
+      B(c, tx0 + tw / 2 - 2, -15, 4, 1, shade(shirt, 0.3), 0, false);
+      B(c, tx0 + tw / 2 - 1, -14, 2, 1, shade(shirt, 0.18), 0, false);
+    }
     if (parts.armor) {
-      B(c, tx0 + 1, -23, tw - 2, 1, shade(shirt, 0.25), 0, false);
-      B(c, tx0 + tw / 2 - 1, -20, 2, 6, shade(shirt, 0.15), 0, false);
+      B(c, tx0 + 1, -14, tw - 2, 1, shade(shirt, 0.25), 0, false);
+      B(c, tx0 + tw / 2 - 1, -12, 2, 4, shade(shirt, 0.15), 0, false);
     }
     if (tn) {
-      limbPx(c, wpnIsNear ? wpnX : othX, -23, wpnIsNear ? rightAng : armO, 9, 4, shirt, SKIN, 0.4, xs);
+      limbPx(c, wpnIsNear ? wpnX : othX, -14, wpnIsNear ? rightAng : armO, 8, 3, shirt, SKIN, 0.45, xs);
     } else {
-      limbPx(c, othX, -23, armO, 9, 4, shirt, SKIN, 0.4, xs);
-      limbPx(c, wpnX, -23, rightAng, 9, 4, shirt, SKIN, 0.4, xs);
+      limbPx(c, othX, -14, armO, 8, 3, shirt, SKIN, 0.45, xs);
+      limbPx(c, wpnX, -14, rightAng, 8, 3, shirt, SKIN, 0.45, xs);
+    }
+    if (parts.armor) {
+      B(c, -7 + tn, -15, 3, 2, shade(shirt, 0.25), 0.05);
+      B(c, 4 + tn, -15, 3, 2, shade(shirt, 0.25), 0.05);
     }
     if (parts.garment) {
-      if (dir === 3) B(c, tx0, -24, tw, 19 + Math.round(amt), parts.garment.tint, 0.14);
-      else B(c, tx0 - 1, -24, tw + 2, 2, parts.garment.tint, 0.1);
+      if (dir === 3) B(c, tx0 - 1, -15, tw + 2, 16 + Math.round(amt), parts.garment.tint, 0.14);
+      else B(c, tx0 - 1, -15, tw + 2, 2, parts.garment.tint, 0.1);
     }
+    if (parts.lower?.hat === "scarf") B(c, tx0 - 1, -16, tw + 2, 3, parts.lower.tint, 0.1, false);
     c.save();
     c.translate(tn, 0);
-    if (parts.lower?.hat === "scarf" && dir === 3) B(c, -5, -25, 10, 2, parts.lower.tint, 0.1, false);
-    B(c, -4, -32, 8, 8, SKIN, 0.1);
-    B(c, -4, -25, 8, 1, SKIN_D, 0, false);
-    if (front) {
-      const e0 = tn * 1;
-      c.fillStyle = "#ffffff";
-      if (tn <= 0) c.fillRect(-3 + e0, -29, tn < 0 ? 2 : 2, 1);
-      else c.fillRect(-2 + e0, -29, 1, 1);
-      if (tn >= 0) c.fillRect(1 + e0, -29, 2, 1);
-      else c.fillRect(1 + e0, -29, 1, 1);
-      c.fillStyle = "#3a2a4a";
-      if (tn <= 0) c.fillRect(-2 + e0 + (tn < 0 ? -1 : 0), -29, 1, 1);
-      if (tn >= 0) c.fillRect(1 + e0 + (tn > 0 ? 1 : 0), -29, 1, 1);
-      c.fillStyle = "#b8704a";
-      c.fillRect(-1 + e0 * 2, -26, 2, 1);
-    }
+    B(c, -6, -26, 12, 11, SKIN, 0.08);
+    B(c, -6, -16, 12, 1, SKIN_D, 0, false);
+    if (front) face(c, 0, tn);
     hair(c, style, hairCol, dir);
     headgear(c, parts, dir);
     c.restore();
     if (parts.weapon) {
-      const ex = wpnX + Math.cos(rad(rightAng)) * 9 * xs;
-      const ey = -23 + Math.sin(rad(rightAng)) * 9;
+      const ex = wpnX + Math.cos(rad(rightAng)) * 8 * xs;
+      const ey = -14 + Math.sin(rad(rightAng)) * 8;
       weapon(c, parts.weapon, ex, ey, rightAng + (restAng - 90) * (atk >= 0 ? pose.bend : 1), xs);
     }
-    if (parts.shield) shield(c, parts.shield, (front ? -10 : 5) + (tn ? tn * 2 : 0), -21);
-    if (parts.acc && front) B(c, -1 + tn * 2, -21, 2, 2, parts.acc, 0, false);
+    if (parts.shield) shield(c, parts.shield, (front ? -11 : 5) + (tn ? tn * 2 : 0), -13);
+    if (parts.acc && front) B(c, -1 + tn * 2, -12, 2, 2, parts.acc, 0, false);
     c.restore();
   } else {
-    // ── side view, facing right ──
-    const lh = sit ? 6 : 12;
     const legF = sit ? 90 : 90 + s * 34;
     const legB = sit ? 90 : 90 - s * 34;
-    limbPx(c, 0, -lh, legB, lh + 1, 4, shade(PANTS, -0.1), shade(shoe, -0.1), 0.78);
-    limbPx(c, 0, -lh, legF, lh + 1, 4, PANTS, shoe, 0.78);
+    limbPx(c, 0, -LH, legB, LH + 1, 4, shade(PANTS, -0.1), shade(shoe, -0.1), 0.72);
+    limbPx(c, 0, -LH, legF, LH + 1, 4, PANTS, shoe, 0.72);
     c.save();
     c.translate(lunge, sy + yb + idle);
     if (parts.garment) {
-      const flow = Math.round(amt * 2 + Math.max(0, lunge < 0 ? 1 : 0));
-      B(c, -4 - flow, -24, 2 + flow, 19, parts.garment.tint, 0.14);
+      const flow = Math.round(amt * 2 + (lunge < 0 ? 1 : 0));
+      B(c, -4 - flow, -15, 2 + flow, 16, parts.garment.tint, 0.14);
     }
-    // far arm
     const farAng = sit ? 90 : 90 - s * 36;
-    limbPx(c, 0, -22, farAng, 9, 3, shade(shirt, -0.2), shade(SKIN, -0.12), 0.4);
-    B(c, -2, -24, 4, 12, shirt, 0.12);
-    B(c, -2, -14, 4, 2, shade(shirt, -0.3), 0, false);
-    if (parts.shield) shield(c, parts.shield, -1, -21);
-    // near (weapon) arm
+    limbPx(c, 0, -13, farAng, 8, 3, shade(shirt, -0.2), shade(SKIN, -0.12), 0.45);
+    B(c, -3, -15, 5, 8, shirt, 0.12);
+    B(c, -3, -9, 5, 2, shade(shirt, -0.18), 0.08, false);
+    belt(-3, 5);
+    if (parts.shield) shield(c, parts.shield, -2, -13);
     const nearAng = atk >= 0 ? pose.ang : sit ? 90 : 90 + s * (parts.weapon ? 18 : 36);
-    limbPx(c, 0, -22, nearAng, 9, 4, shirt, SKIN, 0.4);
+    limbPx(c, 0, -13, nearAng, 8, 3, shirt, SKIN, 0.45);
+    if (parts.armor) B(c, -2, -15, 3, 2, shade(shirt, 0.25), 0.05);
     if (parts.weapon) {
-      const ex = Math.cos(rad(nearAng)) * 9;
-      const ey = -22 + Math.sin(rad(nearAng)) * 9;
-      const wa = nearAng + (restAng - 90) * (atk >= 0 ? pose.bend : 1);
-      weapon(c, parts.weapon, ex, ey, wa, 1);
+      const ex = Math.cos(rad(nearAng)) * 8;
+      const ey = -13 + Math.sin(rad(nearAng)) * 8;
+      weapon(c, parts.weapon, ex, ey, nearAng + (restAng - 90) * (atk >= 0 ? pose.bend : 1), 1);
     }
-    if (parts.lower?.hat === "scarf") B(c, -3, -25, 6, 2, parts.lower.tint, 0.1, false);
-    B(c, -4, -32, 8, 8, SKIN, 0.1);
-    B(c, -4, -25, 8, 1, SKIN_D, 0, false);
-    c.fillStyle = "#ffffff";
-    c.fillRect(1, -29, 2, 1);
-    c.fillStyle = "#3a2a4a";
-    c.fillRect(2, -29, 1, 1);
-    c.fillStyle = "#b8704a";
-    c.fillRect(3, -26, 1, 1);
+    if (parts.lower?.hat === "scarf") B(c, -4, -16, 6, 3, parts.lower.tint, 0.1, false);
+    B(c, -6, -26, 12, 11, SKIN, 0.08);
+    B(c, -6, -16, 12, 1, SKIN_D, 0, false);
+    face(c, 2, 0);
     hair(c, style, hairCol, 2);
     headgear(c, parts, 2);
     c.restore();

@@ -1,5 +1,5 @@
 import { buildingSprite, drawBlockActor, propSprite, type ActorParts } from "@/game/blockart";
-import { B, PX, blit, castShadow, hash, mk, tileTexture } from "@/game/blocky";
+import { B, EPX, PX, blit, castShadow, hash, mk, setEntityPx, tileTexture } from "@/game/blocky";
 import { drawCreature, hasLook } from "@/game/creatures";
 import { ITEMS, MONSTERS, TILE, getMap, hairHex, trimHex, type ItemDef } from "@/game/content";
 import type { Dir, GearSlot, IconKind, Player } from "@/game/types";
@@ -87,7 +87,7 @@ function drawActor(
   parts?: ActorParts,
   turn = 0,
 ) {
-  shadow(ctx, x, y, 10);
+  shadow(ctx, x, y, 3 * EPX);
   ctx.save();
   ctx.translate(Math.round(x + ox), Math.round(y + oy));
   drawBlockActor(ctx, dir, phase, amt, style, hairHex(hair), trimHex(trim), parts ?? partsFromEq(eq), sit, flash, atk, world.time, turn);
@@ -444,9 +444,10 @@ function drawMonster(
   const def = MONSTERS[kind];
   if (!def) return;
   const h = def.draw;
+  const ent = EPX / 3;
   const t = world.time + anim;
-  const flyBob = def.fly ? Math.sin(t * 3.2) * 4 + 12 : 0;
-  shadow(ctx, x, y, h * 0.22 * (def.fly ? 0.8 : 1) * (fx.alpha ?? 1));
+  const flyBob = def.fly ? (Math.sin(t * 3.2) * 4 + 12) * ent : 0;
+  shadow(ctx, x, y, h * ent * 0.22 * (def.fly ? 0.8 : 1) * (fx.alpha ?? 1));
   ctx.save();
   ctx.globalAlpha = fx.alpha ?? 1;
   if (hasLook(def.look)) {
@@ -473,7 +474,7 @@ function updateCam(dt: number, cssW: number, cssH: number) {
   const lk = 1 - Math.exp(-3.2 * dt);
   leadX += (wantX - leadX) * lk;
   leadY += (wantY - leadY) * lk;
-  const focus = p ? { x: p.x + leadX, y: p.y - 18 + leadY } : map.plaza;
+  const focus = p ? { x: p.x + leadX, y: p.y - 4 * EPX + leadY } : map.plaza;
   let dx = focus.x - cssW / 2;
   let dy = focus.y - cssH / 2;
   if (world.screen !== "play") {
@@ -561,6 +562,7 @@ export function renderFrame(canvas: HTMLCanvasElement, dt: number) {
       /* font optional */
     }
   }
+  setEntityPx(Math.max(4, Math.min(7, Math.round(cssH / 120))));
   updateCam(dt, cssW, cssH);
   const dpr = world.dpr;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -679,13 +681,13 @@ export function renderFrame(canvas: HTMLCanvasElement, dt: number) {
           lower: nh === "scarf" || nh === "ribbon" ? { hat: nh, tint: hatTint } : undefined,
         };
         drawActor(ctx, npc.x, npc.y, 0, 0, 0, npc.style, npc.hair, npc.trim, eq, false, 0, 0, -Math.round(bob), -1, nparts);
-        label(ctx, npc.name, npc.x, npc.y - 112, "#f6f0e4");
+        label(ctx, npc.name, npc.x, npc.y - 33 * EPX, "#f6f0e4");
         const p = world.player;
         const bang =
           (npc.role === "waykeeper" && p && p.quest !== "claimed") ||
           (npc.role === "job" && p && p.job === "novice" && p.baseLevel >= 4 && p.jobLevel >= 4);
         if (bang) {
-          const by = Math.round(npc.y - 142 + Math.sin(world.time * 4) * 2);
+          const by = Math.round(npc.y - 33 * EPX - 30 + Math.sin(world.time * 4) * 2);
           ctx.fillStyle = "#2a2118";
           ctx.fillRect(Math.round(npc.x) - 9, by - 3, 18, 21);
           ctx.fillStyle = "#e4b15a";
@@ -719,7 +721,7 @@ export function renderFrame(canvas: HTMLCanvasElement, dt: number) {
         const targeted = world.targetId === m.id;
         if (targeted) {
           const pulse = 1 + Math.sin(world.time * 6) * 0.06;
-          const rw = Math.round((20 * pulse + (def.boss ? 14 : 0)) / PX) * PX;
+          const rw = Math.round(((20 + def.draw * 0.12) * (EPX / 3) * pulse + (def.boss ? 14 : 0)) / PX) * PX;
           const rh = Math.round((9 * pulse + (def.boss ? 5 : 0)) / PX) * PX;
           ctx.strokeStyle = "#f4d26a";
           ctx.lineWidth = 3;
@@ -754,7 +756,7 @@ export function renderFrame(canvas: HTMLCanvasElement, dt: number) {
           scaleY: sys * (0.4 + 0.6 * e) * (1 - (m.hurt > 0 ? 0.08 : 0)),
           alpha: Math.min(1, 0.3 + e),
         });
-        const top = m.y - def.draw - (def.fly ? 18 : 0);
+        const top = m.y - (def.draw + (def.fly ? 18 : 0)) * (EPX / 3);
         label(ctx, `${def.boss ? "★ " : ""}${def.name}`, m.x, top - 6, def.boss ? "#ffd86a" : "#f6f0e4");
         if (m.hp < m.maxHp || targeted || def.boss) {
           const bw = def.boss ? 56 : 36;
@@ -826,20 +828,20 @@ export function renderFrame(canvas: HTMLCanvasElement, dt: number) {
         drawActor(ctx, p.x, p.y, fc.dir, phase, amt, p.style, p.hair, p.trim, p.eq, p.sit || p.feign > 0 || down, p.flash, 0, 0, atk, undefined, fc.turn);
         ctx.restore();
         if (down) return;
-        label(ctx, p.name, p.x, p.y - 112, "#fff6df");
-        if (p.feign > 0) label(ctx, "Playing dead", p.x, p.y - 130, "#b7ad9c");
-        else if (p.sit) label(ctx, "Resting", p.x, p.y - 130, "#7dba6a");
+        label(ctx, p.name, p.x, p.y - 33 * EPX, "#fff6df");
+        if (p.feign > 0) label(ctx, "Playing dead", p.x, p.y - 33 * EPX - 18, "#b7ad9c");
+        else if (p.sit) label(ctx, "Resting", p.x, p.y - 33 * EPX - 18, "#7dba6a");
         if (world.say && world.sayUntil > world.time) {
           ctx.font = `600 13px ${FONT}`;
           const w = Math.min(190, ctx.measureText(world.say).width + 16);
           const bx = Math.round(p.x - w / 2);
           ctx.fillStyle = "#1a1a1a";
-          ctx.fillRect(bx - 2, Math.round(p.y - 158) - 2, w + 4, 26);
+          ctx.fillRect(bx - 2, Math.round(p.y - 33 * EPX - 46) - 2, w + 4, 26);
           ctx.fillStyle = "#f3e6c8";
-          ctx.fillRect(bx, Math.round(p.y - 158), w, 22);
+          ctx.fillRect(bx, Math.round(p.y - 33 * EPX - 46), w, 22);
           ctx.fillStyle = "#2a2118";
           ctx.textAlign = "center";
-          ctx.fillText(world.say, Math.round(p.x), Math.round(p.y - 142));
+          ctx.fillText(world.say, Math.round(p.x), Math.round(p.y - 33 * EPX - 30));
         }
       },
     });

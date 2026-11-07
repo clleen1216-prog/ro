@@ -21,13 +21,20 @@ function R(g: G, x: number, y: number, w: number, h: number, col: string, n = 0.
 
 const sw = (g: G, speed = 10) => Math.sin(g.t * (g.m ? speed : 2));
 
-/** Two eyes on the front, one on the side, none from behind. */
+/** Big shiny eyes: two on the front, one on the side, none from behind. */
+function eye1(g: G, x: number, y: number, w: number, h: number, col: string) {
+  R(g, x, y, w, h, col, 0, false);
+  R(g, x, y, 1, 1, "#ffffff", 0, false);
+}
+
 function eyes(g: G, x: number, y: number, gap: number, col = INK, size = 2) {
   if (g.v === "b") return;
+  const w = Math.max(2, size + 1);
+  const h = w + 1;
   if (g.v === "f") {
-    R(g, x - gap / 2 - size / 2, y, size, size, col, 0, false);
-    R(g, x + gap / 2 - size / 2, y, size, size, col, 0, false);
-  } else R(g, x + gap / 2, y, size, size, col, 0, false);
+    eye1(g, x - gap / 2 - w / 2, y, w, h, col);
+    eye1(g, x + gap / 2 - w / 2, y, w, h, col);
+  } else eye1(g, x + gap / 2, y, w, h, col);
 }
 
 // ── Slimes ──────────────────────────────────────────────────────────────
@@ -69,7 +76,7 @@ function humanoid(g: G, o: Hum) {
   const S = (v: number) => Math.round(v * f);
   const lw = 4 + (o.wide ?? 0) / 2;
   const tw = 8 + (o.wide ?? 0);
-  const hw = o.headW ?? 7;
+  const hw = o.headW ?? 10;
   const side = g.v === "s";
   const pose = atkPose(g.atk);
   const amt = g.m ? 1 : 0;
@@ -127,20 +134,20 @@ function humanoid(g: G, o: Hum) {
     }
   }
   const hx = -hw / 2;
-  R(g, hx, -21, hw, 7, o.skin, 0.12);
+  R(g, hx, -24, hw, 10, o.skin, 0.12);
   if (o.ears) {
-    R(g, hx - 2, -19, 2, 2, o.skin, 0, false);
-    R(g, hx + hw, -19, 2, 2, o.skin, 0, false);
+    R(g, hx - 2, -20, 2, 3, o.skin, 0, false);
+    R(g, hx + hw, -20, 2, 3, o.skin, 0, false);
   }
-  eyes(g, 0, -19, hw > 7 ? 4 : 3, o.eye ?? INK, 1);
+  eyes(g, 0, -20, hw > 10 ? 5 : 4, o.eye ?? INK, 1);
   if (g.v !== "b") {
-    R(g, side ? 1 : -1, -16, 2, 1, shade(o.skin, -0.4), 0, false);
+    R(g, side ? 2 : -1, -16, 2, 1, shade(o.skin, -0.4), 0, false);
     if (o.tusks) {
-      R(g, side ? 2 : -2, -16, 1, 2, "#f2ecda", 0, false);
-      if (!side) R(g, 1, -16, 1, 2, "#f2ecda", 0, false);
+      R(g, side ? 3 : -3, -16, 1, 2, "#f2ecda", 0, false);
+      if (!side) R(g, 2, -16, 1, 2, "#f2ecda", 0, false);
     }
   }
-  if (o.crown) R(g, hx - 0.5, -22, hw + 1, 2, o.crown, 0.1);
+  if (o.crown) R(g, hx - 0.5, -26, hw + 1, 3, o.crown, 0.1);
   // weapon follows the hand and swings with the arm
   const bend = g.atk >= 0 ? pose.bend : 1;
   const wa = wpnTip.ang + (-75 - 90) * bend;
@@ -172,7 +179,7 @@ function orc(g: G, o: { skin: string; armor: string; cloth: string; weapon: Hum[
     eye: o.bone ? "#d4534a" : "#2a1a10",
     weapon: o.weapon,
     wide: 2,
-    headW: 8,
+    headW: 11,
     tusks: !o.bone,
     ribs: o.bone,
     rot: o.rot,
@@ -215,21 +222,21 @@ function quad(g: G, o: { body: string; head: string; ear: string; tail: string; 
     limbPx(g.c, S(7 * b), -S(4), 90 + ph * am, S(5), S(3), shade(o.legs, -0.1), shade(o.legs, -0.3), 0.75);
     R(g, -9 * b, -11 * b, 18 * b, 8 * b, o.body, 0.14);
     R(g, -12 * b, -12 * b + Math.round(ph), 4, 3, o.tail, 0.1);
-    R(g, 7 * b, -16 * b, 8, 7, o.head, 0.12);
-    R(g, 14 * b, -13 * b, 4, 3, o.snout ?? o.head, 0.1);
-    R(g, 8 * b, -18 * b, 2, 3, o.ear, 0, false);
-    R(g, 12 * b, -18 * b, 2, 3, o.ear, 0, false);
-    R(g, 11 * b, -15 * b, 1, 1, INK, 0, false);
+    R(g, 6 * b, -18 * b, 10, 9, o.head, 0.12);
+    R(g, 15 * b, -13 * b, 4, 3, o.snout ?? o.head, 0.1);
+    R(g, 7 * b, -21 * b, 2, 4, o.ear, 0, false);
+    R(g, 12 * b, -21 * b, 2, 4, o.ear, 0, false);
+    eye1(g, 11 * b, -16 * b, 2, 3, INK);
   } else {
     R(g, -4 * b, -4, 3, 4, o.legs, 0.1);
     R(g, 1 * b, -4, 3, 4, shade(o.legs, -0.1), 0.1);
     R(g, -5 * b, -12 * b, 10 * b, 9 * b, o.body, 0.14);
     if (g.v === "f") {
-      R(g, -4, -19 * b, 8, 8, o.head, 0.12);
+      R(g, -5, -21 * b, 10, 10, o.head, 0.12);
       R(g, -2, -14 * b, 4, 3, o.snout ?? o.head, 0.1);
-      R(g, -5, -21 * b, 2, 3, o.ear, 0, false);
-      R(g, 3, -21 * b, 2, 3, o.ear, 0, false);
-      eyes(g, 0, -17 * b, 5, INK, 1);
+      R(g, -6, -24 * b, 2, 4, o.ear, 0, false);
+      R(g, 4, -24 * b, 2, 4, o.ear, 0, false);
+      eyes(g, 0, -18 * b, 6, INK, 1);
     } else R(g, -1, -9 * b, 2, 5, o.tail, 0, false);
   }
 }

@@ -51,7 +51,7 @@ export const world = {
   dialog: null as Dialog | null,
   shop: null as null | "smith" | "outfit" | "supply",
   storageOpen: false,
-  panels: { status: false, equip: false, inv: false, skills: false, help: false },
+  panels: { status: false, equip: false, inv: false, skills: false, help: false, nav: false },
   keys: new Set<string>(),
   qaKeys: null as Set<string> | null,
   touch: { x: 0, y: 0, attack: false },
@@ -78,6 +78,8 @@ export const world = {
   hover: "",
   /** click-to-move marker */
   clickMark: null as null | { x: number; y: number; t: number },
+  /** auto-battle / auto-navigation */
+  auto: { battle: false, travel: null as MapId | null, skillT: 0, pathT: 0, note: "" },
 };
 
 let rev = 0;

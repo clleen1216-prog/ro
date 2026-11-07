@@ -7,6 +7,12 @@
 
 export const PX = 3;
 
+/** Texel size for moving entities (people and monsters); larger than world texels. */
+export let EPX = 5;
+export function setEntityPx(n: number) {
+  EPX = n;
+}
+
 type Rgb = [number, number, number];
 const rgbCache = new Map<string, Rgb>();
 
@@ -242,7 +248,7 @@ export function scratch(): { cv: HTMLCanvasElement; c: Ctx } {
 }
 
 /** Blit the scratch buffer so its feet-origin lands on the current transform's (0,0). */
-export function blitScratch(ctx: Ctx, flash = 0) {
+export function blitScratch(ctx: Ctx, flash = 0, px = EPX) {
   if (!scratchCv) return;
   if (flash > 0) {
     const c = scratchCtx!;
@@ -253,7 +259,7 @@ export function blitScratch(ctx: Ctx, flash = 0) {
     c.globalCompositeOperation = "source-over";
   }
   ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(scratchCv, -(SCR_W / 2) * PX, -(SCR_H - 4) * PX, SCR_W * PX, SCR_H * PX);
+  ctx.drawImage(scratchCv, -(SCR_W / 2) * px, -(SCR_H - 4) * px, SCR_W * px, SCR_H * px);
 }
 
 // ── Cast shadows (light from the upper left, falling to the lower right) ──
@@ -288,7 +294,7 @@ export function castShadow(ctx: Ctx, cv: HTMLCanvasElement, x: number, y: number
 let shCv: HTMLCanvasElement | null = null;
 
 /** Same, for whatever is currently in the scratch buffer (origin at the current transform). */
-export function castShadowScratch(ctx: Ctx, alpha = 0.26, len = 0.32) {
+export function castShadowScratch(ctx: Ctx, alpha = 0.26, len = 0.32, px = EPX) {
   if (!scratchCv) return;
   if (!shCv) shCv = mk(SCR_W, SCR_H);
   const c = shCv.getContext("2d")!;
@@ -303,7 +309,7 @@ export function castShadowScratch(ctx: Ctx, alpha = 0.26, len = 0.32) {
   ctx.globalAlpha = alpha * ctx.globalAlpha;
   ctx.imageSmoothingEnabled = false;
   ctx.transform(1, 0, -0.55, -len, 0, 0);
-  ctx.drawImage(shCv, -(SCR_W / 2) * PX, -(SCR_H - 4) * PX, SCR_W * PX, SCR_H * PX);
+  ctx.drawImage(shCv, -(SCR_W / 2) * px, -(SCR_H - 4) * px, SCR_W * px, SCR_H * px);
   ctx.restore();
 }
 

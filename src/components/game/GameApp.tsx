@@ -1,5 +1,5 @@
 import { useEffect, useRef, useSyncExternalStore } from "react";
-import { Backpack, CircleHelp, Shield, Sparkles, UserRound, Volume2, VolumeX, X } from "lucide-react";
+import { Backpack, CircleHelp, Compass, Shield, Sparkles, Swords, UserRound, Volume2, VolumeX, X } from "lucide-react";
 import { loadAll } from "@/game/assets";
 import { setMusicOn, setTrack, sfxClick, tick, trackTitle, unlock } from "@/game/audio";
 import {
@@ -14,6 +14,7 @@ import {
   STYLES,
   SUPPLY_STOCK,
   TRIMS,
+  MAP_IDS,
   MAX_BASE,
   MAX_JOB,
   MONSTERS,
@@ -24,7 +25,7 @@ import {
   sellPrice,
 } from "@/game/content";
 import { drawItemIcon, drawPreview, renderFrame } from "@/game/draw";
-import { castSkill, holdMove, installProbe, pickAt, pointerDown, step } from "@/game/sim";
+import { cancelTravel, castSkill, holdMove, installProbe, pickAt, pointerDown, setAutoBattle, step, travelTo } from "@/game/sim";
 import type { GearSlot, HotSlot, Player, SkillId } from "@/game/types";
 import {
   addStat,
@@ -219,6 +220,8 @@ export function GameApp() {
       if (e.code === "KeyE") togglePanel("equip");
       if (e.code === "KeyK") togglePanel("skills");
       if (e.code === "KeyH") togglePanel("help");
+      if (e.code === "KeyB") setAutoBattle(!world.auto.battle);
+      if (e.code === "KeyN") togglePanel("nav");
       if (e.code === "KeyR" && world.player) {
         world.player.sit = !world.player.sit;
         world.player.sit && (world.path = []);
@@ -443,6 +446,12 @@ export function GameApp() {
               <IconBtn label="Skills (K)" onClick={() => togglePanel("skills")}>
                 <Sparkles />
               </IconBtn>
+              <IconBtn label={world.auto.battle ? "Auto Battle ON (B)" : "Auto Battle (B)"} onClick={() => setAutoBattle(!world.auto.battle)} active={world.auto.battle}>
+                <Swords />
+              </IconBtn>
+              <IconBtn label="Auto Navigation (N)" onClick={() => togglePanel("nav")} active={Boolean(world.auto.travel)}>
+                <Compass />
+              </IconBtn>
               <IconBtn label="Help (H)" onClick={() => togglePanel("help")}>
                 <CircleHelp />
               </IconBtn>
@@ -460,6 +469,7 @@ export function GameApp() {
           </div>
 
           <TargetCard />
+          <AutoChip />
 
           <div className="pointer-events-none absolute top-40 right-3 left-3 flex flex-col gap-1 sm:top-auto sm:bottom-28 sm:left-3 sm:max-w-xs">
             <Meter label="HP" value={player.hp} max={derive(player).maxHp} bar="bg-hp" track="bg-hp-deep" />
@@ -515,9 +525,6 @@ export function GameApp() {
             </div>
           </div>
 
-          <div className="touch-only pointer-events-auto absolute bottom-24 left-3 h-28 w-28 place-items-center rounded-full border border-line bg-surface/80">
-            <Stick />
-          </div>
           <button
             type="button"
             className="touch-only pointer-events-auto absolute right-3 bottom-28 h-16 w-16 place-items-center rounded-full bg-gold text-sm font-medium text-ink"
@@ -540,6 +547,7 @@ export function GameApp() {
             {world.panels.inv && <BagWindow />}
             {world.panels.skills && <SkillWindow />}
             {world.panels.help && <HelpWindow />}
+            {world.panels.nav && <NavWindow />}
             {world.shop && <ShopWindow />}
             {world.storageOpen && <StorageWindow />}
           </div>
@@ -603,17 +611,67 @@ export function GameApp() {
   );
 }
 
-function IconBtn({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
+function IconBtn({ label, onClick, children, active }: { label: string; onClick: () => void; children: React.ReactNode; active?: boolean }) {
   return (
     <button
       type="button"
       aria-label={label}
       title={label}
       onClick={onClick}
-      className="grid h-11 w-11 place-items-center rounded-md border border-line bg-surface text-fg"
+      className={`grid h-11 w-11 place-items-center rounded-md border border-line text-fg ${active ? "bg-job text-ink" : "bg-surface"}`}
     >
       <span className="size-5">{children}</span>
     </button>
+  );
+}
+
+function NavWindow() {
+  const here = world.mapId;
+  return (
+    <Window title="Auto Navigation" onClose={() => togglePanel("nav")}>
+      <p className="mb-2 text-xs text-muted">Pick a destination and your hero walks there through the gates by itself. Move manually to cancel.</p>
+      <div className="grid gap-1">
+        {MAP_IDS.map((id) => (
+          <button
+            key={id}
+            type="button"
+            disabled={id === here}
+            className="flex items-center justify-between border border-line bg-surface-2 px-3 py-2 text-left text-sm"
+            onClick={() => {
+              travelTo(id);
+              togglePanel("nav");
+            }}
+          >
+            <span>{getMap(id).name}</span>
+            <span className="text-xs text-muted">{id === here ? "you are here" : world.auto.travel === id ? "heading there…" : "Go"}</span>
+          </button>
+        ))}
+      </div>
+      {world.auto.travel && (
+        <button type="button" className="mt-2 w-full border border-line bg-hp-deep px-3 py-2 text-sm" onClick={() => cancelTravel()}>
+          Stop navigating
+        </button>
+      )}
+    </Window>
+  );
+}
+
+function AutoChip() {
+  const au = world.auto;
+  if (!au.battle && !au.travel) return null;
+  return (
+    <div className="pointer-events-none absolute top-16 left-1/2 flex -translate-x-1/2 gap-2">
+      {au.travel && (
+        <button type="button" className="pointer-events-auto border border-line bg-surface px-3 py-1 text-xs text-gold" onClick={() => cancelTravel()}>
+          Navigating to {getMap(au.travel).name} — tap to stop
+        </button>
+      )}
+      {au.battle && (
+        <button type="button" className="pointer-events-auto border border-line bg-surface px-3 py-1 text-xs text-job" onClick={() => setAutoBattle(false)}>
+          Auto Battle ON — tap to stop
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -990,44 +1048,6 @@ function StorageWindow() {
         </div>
       </div>
     </Window>
-  );
-}
-
-function Stick() {
-  const knob = useRef<HTMLSpanElement>(null);
-  const move = (clientX: number, clientY: number, el: HTMLDivElement) => {
-    const rect = el.getBoundingClientRect();
-    const dx = clientX - (rect.left + rect.width / 2);
-    const dy = clientY - (rect.top + rect.height / 2);
-    const max = rect.width / 2;
-    const len = Math.hypot(dx, dy) || 1;
-    const raw = Math.min(1, len / max);
-    const mag = raw < 0.18 ? 0 : (raw - 0.18) / 0.82;
-    world.touch.x = mag ? (dx / len) * mag : 0;
-    world.touch.y = mag ? (dy / len) * mag : 0;
-    if (knob.current) {
-      knob.current.style.transform = `translate(calc(-50% + ${(dx / len) * mag * 28}px), calc(-50% + ${(dy / len) * mag * 28}px))`;
-    }
-  };
-  return (
-    <div
-      className="relative h-full w-full"
-      onPointerDown={(e) => {
-        e.currentTarget.setPointerCapture(e.pointerId);
-        move(e.clientX, e.clientY, e.currentTarget);
-      }}
-      onPointerMove={(e) => {
-        if (e.currentTarget.hasPointerCapture(e.pointerId)) move(e.clientX, e.clientY, e.currentTarget);
-      }}
-      onPointerUp={(e) => {
-        world.touch.x = 0;
-        world.touch.y = 0;
-        if (knob.current) knob.current.style.transform = "translate(-50%, -50%)";
-        e.currentTarget.releasePointerCapture(e.pointerId);
-      }}
-    >
-      <span ref={knob} className="absolute top-1/2 left-1/2 h-10 w-10 rounded-full bg-gold" style={{ transform: "translate(-50%, -50%)" }} />
-    </div>
   );
 }
 

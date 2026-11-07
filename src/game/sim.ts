@@ -1,7 +1,8 @@
+import { EPX } from "@/game/blocky";
 import { sfxBow, sfxCast, sfxDown, sfxFoot, sfxHeal, sfxHit, sfxMiss, sfxPickup, sfxPortal, sfxSwing } from "@/game/audio";
 import { ITEMS, MONSTERS, SKILLS, TILE, getMap, isBlocked } from "@/game/content";
-import type { Dir, Monster, SkillId } from "@/game/types";
-import { INV_CAP, burst, derive, dust, enterMap, float, grantKill, log, openNpc, world } from "@/game/world";
+import type { Dir, Drop, MapId, Monster, SkillId } from "@/game/types";
+import { INV_CAP, bump, burst, derive, dust, enterMap, float, grantKill, log, openNpc, useStack, world } from "@/game/world";
 
 function logPickup(name: string, rare?: boolean) {
   log(rare ? `Rare drop! You picked up ${name}.` : `Picked up ${name}.`);
@@ -547,16 +548,16 @@ export function pickAt(wx: number, wy: number) {
   let best = "";
   let bestD = 42;
   for (const n of map.npcs) {
-    const dd = dist(wx, wy, n.x, n.y - 36);
-    if (dd < bestD) {
+    const dd = dist(wx, wy, n.x, n.y - 14 * EPX);
+    if (dd < bestD * (EPX / 3)) {
       best = `npc:${n.id}`;
       bestD = 46;
     }
   }
   for (const m of world.monsters) {
     if (!m.alive) continue;
-    const dd = dist(wx, wy, m.x, m.y - 30);
-    if (dd < 40 && dd < bestD + 8) {
+    const dd = dist(wx, wy, m.x, m.y - 10 * EPX);
+    if (dd < 40 * (EPX / 3) && dd < bestD * (EPX / 3) + 8) {
       best = `mon:${m.id}`;
       bestD = dd;
     }
@@ -634,6 +635,7 @@ function respawn() {
   const d = derive(p);
   p.hp = d.maxHp;
   p.sp = Math.floor(d.maxSp * 0.5);
+  world.auto.travel = null;
   enterMap("ambercross", map.start.x, map.start.y);
   sfxPortal();
 }
@@ -877,6 +879,167 @@ function decayWorld(dt: number) {
   world.drops = world.drops.filter((drop) => drop.ttl === undefined || drop.ttl > 0);
 }
 
+// ── Auto battle & auto navigation ───────────────────────────────────────
+
+function routeNext(from: MapId, to: MapId): MapId | null {
+  if (from === to) return null;
+  const prev = new Map<MapId, MapId>([[from, from]]);
+  const queue: MapId[] = [from];
+  while (queue.length) {
+    const cur = queue.shift()!;
+    for (const po of getMap(cur).portals) {
+      if (prev.has(po.to)) continue;
+      prev.set(po.to, cur);
+      if (po.to === to) {
+        let at: MapId = to;
+        while (prev.get(at) !== from) at = prev.get(at)!;
+        return at;
+      }
+      queue.push(po.to);
+    }
+  }
+  return null;
+}
+
+export function setAutoBattle(on: boolean) {
+  world.auto.battle = on;
+  if (!on) {
+    world.targetId = null;
+    world.path = [];
+  }
+  const p = world.player;
+  if (p) float(p.x, p.y - 150, on ? "Auto Battle ON" : "Auto Battle OFF", on ? "#7dba6a" : "#b7ad9c", true);
+  bump();
+}
+
+export function travelTo(dest: MapId) {
+  const p = world.player;
+  if (!p) return;
+  if (dest === world.mapId) {
+    world.auto.travel = null;
+    bump();
+    return;
+  }
+  if (!routeNext(world.mapId, dest)) {
+    log("No known path there.");
+    return;
+  }
+  world.auto.travel = dest;
+  world.targetId = null;
+  world.pendingTalk = null;
+  world.path = [];
+  p.sit = false;
+  log(`Auto-navigating to ${getMap(dest).name}…`);
+  bump();
+}
+
+export function cancelTravel() {
+  if (world.auto.travel) {
+    world.auto.travel = null;
+    world.path = [];
+    bump();
+  }
+}
+
+function drinkIfNeeded(d: ReturnType<typeof derive>) {
+  const p = world.player;
+  if (!p || p.itemCd > 0) return;
+  const want = p.hp < d.maxHp * 0.4 ? "hp" : p.sp < d.maxSp * 0.15 ? "sp" : "";
+  if (!want) return;
+  let best = -1;
+  let bestVal = 0;
+  p.inv.forEach((st, i) => {
+    const it = ITEMS[st.itemId];
+    if (!it || it.slot !== "use") return;
+    const v = want === "hp" ? it.heal ?? 0 : it.spRestore ?? 0;
+    if (v > bestVal) {
+      best = i;
+      bestVal = v;
+    }
+  });
+  if (best >= 0) useStack(best);
+}
+
+/** Returns true while auto-navigation is steering. */
+function autoStep(dt: number, d: ReturnType<typeof derive>) {
+  const p = world.player;
+  if (!p) return false;
+  const au = world.auto;
+  au.skillT = Math.max(0, au.skillT - dt);
+  au.pathT = Math.max(0, au.pathT - dt);
+  if (au.battle || au.travel) drinkIfNeeded(d);
+  if (au.travel) {
+    if (world.mapId === au.travel) {
+      log(`Arrived at ${getMap(au.travel).name}.`);
+      au.travel = null;
+      world.path = [];
+      bump();
+      return false;
+    }
+    const next = routeNext(world.mapId, au.travel);
+    const portal = next ? getMap(world.mapId).portals.find((po) => po.to === next) : undefined;
+    if (!portal) {
+      au.travel = null;
+      return false;
+    }
+    p.sit = false;
+    world.targetId = null;
+    if (!world.path.length && au.pathT <= 0) {
+      world.path = pathTo(portal.x + portal.w / 2, portal.y + portal.h / 2);
+      au.pathT = 0.6;
+    }
+    return true;
+  }
+  if (!au.battle) return false;
+  if (world.mapId === "ambercross") {
+    au.battle = false;
+    float(p.x, p.y - 150, "No monsters in town — go hunting!", "#f6f0e4", true);
+    bump();
+    return false;
+  }
+  p.sit = false;
+  let target = monsterById(world.targetId);
+  if (!target || !target.alive) {
+    world.targetId = null;
+    target = nearestMonster(900);
+    if (target) world.targetId = target.id;
+  }
+  if (target) {
+    const dd = dist(p.x, p.y, target.x, target.y);
+    if (au.skillT <= 0 && dd < d.range + 120) {
+      const choices = p.hotbar
+        .map((s) => (s && s.kind === "skill" ? s.id : null))
+        .filter((id): id is SkillId => Boolean(id))
+        .filter((id) => {
+          const sk = SKILLS[id];
+          const lv = p.skills[id] ?? 0;
+          return sk && lv > 0 && (sk.target === "enemy" || sk.target === "area") && p.sp >= sk.sp + Math.max(0, lv - 1) * 2 + 4;
+        });
+      if (choices.length) {
+        castSkill(choices[Math.floor(Math.random() * choices.length)]!);
+        au.skillT = 1.4;
+      }
+    }
+    return false;
+  }
+  // nothing to fight: collect nearby loot
+  let loot: Drop | null = null;
+  let bestD = 520;
+  for (const dr of world.drops) {
+    if (dr.mapId !== world.mapId) continue;
+    const dd = dist(p.x, p.y, dr.x, dr.y);
+    if (dd < bestD) {
+      loot = dr;
+      bestD = dd;
+    }
+  }
+  if (loot && !world.path.length && au.pathT <= 0) {
+    world.path = pathTo(loot.x, loot.y);
+    au.pathT = 0.5;
+  }
+  return false;
+}
+
 export function step(dt: number) {
   const p = world.player;
   if (!p) return;
@@ -950,6 +1113,8 @@ export function step(dt: number) {
   } else {
     gain = 0;
   }
+  if (manual && world.auto.travel) cancelTravel();
+  if (!manual) autoStep(dt, d);
   const rawSpeed = dt > 0 ? movedPx / dt : 0;
   p.speedInstant = rawSpeed;
   noteSteps(movedPx);

@@ -1707,6 +1707,8 @@ const orc = buildWild({
 
 const MAPS: Record<MapId, MapDef> = { ambercross: city, southmead: field, poring, woods, dunes, crypt, orc };
 
+export const MAP_IDS = Object.keys(MAPS) as MapId[];
+
 export function getMap(id: MapId) {
   return MAPS[id];
 }
