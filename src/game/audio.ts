@@ -196,6 +196,14 @@ export function sfxHit() {
   src.start();
   blip(180 + Math.random() * 40, 0.08, "square", 0.05);
 }
+export function sfxCrit() {
+  if (!ctx || !sfxGain || !sfxEnabled) return;
+  const t = ctx.currentTime;
+  tone(t, 0.07, 1320, "square", 0.07, sfxGain);
+  tone(t + 0.05, 0.1, 1980, "square", 0.06, sfxGain);
+  tone(t + 0.1, 0.22, 2640, "triangle", 0.06, sfxGain);
+  blip(90, 0.16, "sawtooth", 0.07);
+}
 export function sfxMiss() {
   blip(140, 0.08, "sine", 0.04);
 }

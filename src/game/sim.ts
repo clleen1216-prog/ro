@@ -1,5 +1,5 @@
 import { EPX } from "@/game/blocky";
-import { sfxBow, sfxCast, sfxDown, sfxFoot, sfxHeal, sfxHit, sfxMiss, sfxPickup, sfxPortal, sfxSwing } from "@/game/audio";
+import { sfxBow, sfxCrit, sfxCast, sfxDown, sfxFoot, sfxHeal, sfxHit, sfxMiss, sfxPickup, sfxPortal, sfxSwing } from "@/game/audio";
 import { ITEMS, MONSTERS, SKILLS, TILE, getMap, isBlocked } from "@/game/content";
 import type { BuffStat, Dir, Drop, MapId, Monster, SkillDef, SkillId } from "@/game/types";
 import { INV_CAP, autoEquip, bump, burst, derive, dust, enterMap, float, grantKill, log, openNpc, useStack, world } from "@/game/world";
@@ -292,7 +292,7 @@ export function basicAttack() {
   const dmg = Math.max(1, Math.round(raw));
   later(rel + fl, () => {
     if (!target.alive) return;
-    hurtNow(target, dmg, crit ? "#e4b15a" : magicHit ? "#bcd4ff" : "#f6f0e4");
+    hurtNow(target, dmg, crit ? CRIT : magicHit ? "#bcd4ff" : "#f6f0e4");
     sfxHit();
     world.shake = Math.min(5, world.shake + (crit ? 3 : 1.4));
   });
@@ -332,6 +332,8 @@ function hurtMonster(m: Monster, dmg: number, color: string) {
   hurtNow(m, dmg, color);
 }
 
+const CRIT = "#ffcf3a";
+
 function hurtNow(m: Monster, dmg: number, color: string) {
   const st = MONSTERS[m.kind]!;
   const p = world.player;
@@ -340,14 +342,25 @@ function hurtNow(m: Monster, dmg: number, color: string) {
   m.hurt = 0.2;
   m.aggro = st.behavior !== "skittish";
   m.windup = 0;
+  const isCrit = color === CRIT;
   burst(m.x, m.y - 36, color);
   const big = dmg >= st.hp * 0.25 || color === "#e4b15a";
-  float(m.x + (Math.random() - 0.5) * 14, m.y - 64, String(dmg), color, big);
+  if (isCrit) {
+    for (let i = 0; i < 3; i++) burst(m.x + (Math.random() - 0.5) * 22, m.y - 36 + (Math.random() - 0.5) * 22, i === 1 ? "#ffffff" : "#ff7a2a");
+    world.crits.push({ x: m.x, y: m.y - 38, t: 0 });
+    float(m.x + (Math.random() - 0.5) * 10, m.y - 66, `${dmg}!`, CRIT, true, true);
+    float(m.x, m.y - 112, "CRITICAL!", "#ff6a2a", false);
+    world.hitStop = Math.max(world.hitStop, 0.075);
+    world.shake = Math.min(11, world.shake + 6);
+    world.flash = Math.min(0.35, world.flash + 0.22);
+    m.hurt = 0.32;
+    sfxCrit();
+  } else float(m.x + (Math.random() - 0.5) * 14, m.y - 64, String(dmg), color, big);
   if (p && !st.boss) {
     const dx = m.x - p.x;
     const dy = m.y - p.y;
     const len = Math.hypot(dx, dy) || 1;
-    const k = big ? 150 : 90;
+    const k = isCrit ? 210 : big ? 150 : 90;
     m.kbx = (dx / len) * k;
     m.kby = (dy / len) * k;
   }
@@ -398,7 +411,7 @@ function runFx(sk: SkillDef, lv: number, d: ReturnType<typeof derive>, target: M
           sfxMiss();
           return;
         }
-        hurtNow(m, Math.max(1, Math.round(raw)), crit ? "#e4b15a" : fx.col ?? "#f6f0e4");
+        hurtNow(m, Math.max(1, Math.round(raw)), crit ? CRIT : fx.col ?? "#f6f0e4");
         sfxHit();
       });
     }
@@ -1258,9 +1271,18 @@ function autoStep(dt: number, d: ReturnType<typeof derive>) {
   return false;
 }
 
-export function step(dt: number) {
+export function step(dt0: number) {
   const p = world.player;
   if (!p) return;
+  // critical hits freeze the action for a beat
+  let dt = dt0;
+  if (world.hitStop > 0) {
+    world.hitStop = Math.max(0, world.hitStop - dt0);
+    dt = dt0 * 0.1;
+  }
+  world.flash = Math.max(0, world.flash - dt0 * 1.6);
+  for (const c of world.crits) c.t += dt0;
+  world.crits = world.crits.filter((c) => c.t < 0.45);
   runLater(dt);
   if (p.downFor > 0) {
     p.downFor -= dt;

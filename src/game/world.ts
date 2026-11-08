@@ -19,6 +19,7 @@ import {
   rollLoot,
 } from "@/game/content";
 import type {
+  CritFx,
   Dialog,
   Drop,
   FloatText,
@@ -49,6 +50,9 @@ export const world = {
   monsters: [] as Monster[],
   drops: [] as Drop[],
   floats: [] as FloatText[],
+  crits: [] as CritFx[],
+  hitStop: 0,
+  flash: 0,
   particles: [] as Particle[],
   logs: [] as string[],
   dialog: null as Dialog | null,
@@ -432,8 +436,8 @@ export function persist() {
   world.hasSave = true;
 }
 
-export function float(x: number, y: number, text: string, color: string, big = false) {
-  world.floats.push({ x, y, text, life: big ? 1.15 : 0.9, color, big });
+export function float(x: number, y: number, text: string, color: string, big = false, crit = false) {
+  world.floats.push({ x, y, text, life: crit ? 1.5 : big ? 1.15 : 0.9, color, big: big || crit, crit, rot: crit ? (Math.random() - 0.5) * 0.25 : 0 });
   if (world.floats.length > 36) world.floats.shift();
 }
 

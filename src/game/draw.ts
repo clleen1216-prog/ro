@@ -982,8 +982,46 @@ export function renderFrame(canvas: HTMLCanvasElement, dt: number) {
   }
   drawShots(ctx);
 
+  for (const c of world.crits) {
+    const k = c.t / 0.45;
+    const r = 8 + k * 46;
+    ctx.save();
+    ctx.translate(Math.round(c.x), Math.round(c.y));
+    ctx.globalAlpha = 1 - k;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(-Math.round(r * 0.18), -Math.round(r * 0.18), Math.round(r * 0.36), Math.round(r * 0.36));
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2 + 0.2;
+      const long = i % 2 === 0;
+      const len = r * (long ? 1 : 0.6);
+      ctx.strokeStyle = i % 2 ? "#ff7a2a" : "#ffe27a";
+      ctx.lineWidth = long ? 4 : 3;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * r * 0.3, Math.sin(a) * r * 0.3);
+      ctx.lineTo(Math.cos(a) * len, Math.sin(a) * len);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
   for (const f of world.floats) {
     ctx.globalAlpha = Math.max(0, Math.min(1, f.life * 1.4));
+    if (f.crit) {
+      const age = 1.5 - f.life;
+      const pop = 1 + Math.max(0, 0.9 - age * 4.5);
+      ctx.save();
+      ctx.translate(f.x, f.y);
+      ctx.rotate(f.rot ?? 0);
+      ctx.font = `700 ${Math.round(24 * pop)}px ${FONT}`;
+      ctx.textAlign = "center";
+      ctx.lineWidth = 6;
+      ctx.strokeStyle = "#7a1e0a";
+      ctx.strokeText(f.text, 0, 0);
+      ctx.fillStyle = age < 0.18 ? "#ffffff" : f.color;
+      ctx.fillText(f.text, 0, 0);
+      ctx.restore();
+      ctx.globalAlpha = 1;
+      continue;
+    }
     const pop = f.big ? 1 + Math.max(0, 0.5 - (1.15 - f.life) * 3) : 1;
     ctx.font = `700 ${Math.round((f.big ? 20 : 15) * pop)}px ${FONT}`;
     ctx.textAlign = "center";
@@ -1006,6 +1044,10 @@ export function renderFrame(canvas: HTMLCanvasElement, dt: number) {
   ctx.globalAlpha = 1;
   ctx.restore();
 
+  if (world.flash > 0.01) {
+    ctx.fillStyle = `rgba(255,236,170,${world.flash})`;
+    ctx.fillRect(0, 0, cssW, cssH);
+  }
   const hz = ctx.createLinearGradient(0, 0, 0, cssH);
   hz.addColorStop(0, "rgba(190,215,255,0.1)");
   hz.addColorStop(0.5, "rgba(190,215,255,0)");

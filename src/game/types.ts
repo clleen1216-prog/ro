@@ -247,7 +247,8 @@ export type Drop = {
   rare?: boolean;
 };
 
-export type FloatText = { x: number; y: number; text: string; life: number; color: string; big?: boolean };
+export type FloatText = { x: number; y: number; text: string; life: number; color: string; big?: boolean; crit?: boolean; rot?: number };
+export type CritFx = { x: number; y: number; t: number };
 export type Particle = {
   x: number;
   y: number;
