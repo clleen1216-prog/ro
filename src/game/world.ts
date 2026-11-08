@@ -482,7 +482,8 @@ export function burst(x: number, y: number, color: string) {
   }
 }
 
-export const INV_CAP = 40;
+/** Beta: the bag and storage have no size limit. */
+export const INV_CAP = Number.MAX_SAFE_INTEGER;
 const INV_MAX = INV_CAP;
 
 export function addItem(itemId: string, qty: number) {

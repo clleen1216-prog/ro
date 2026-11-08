@@ -1,4 +1,4 @@
-import { useEffect, useRef, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Backpack, Crown, CircleHelp, Compass, Shield, SlidersHorizontal, Sparkles, Swords, UserRound, Volume2, VolumeX, X } from "lucide-react";
 import { loadAll } from "@/game/assets";
 import { setMusicOn, setTrack, sfxClick, tick, trackTitle, unlock } from "@/game/audio";
@@ -7,6 +7,7 @@ import {
   HAIR_COLORS,
   ITEMS,
   JOBS,
+  canEquip,
   OUTFIT_STOCK,
   SKILLS,
   SLOT_LABEL,
@@ -54,7 +55,6 @@ import {
   unequip,
   useStack,
   world,
-  INV_CAP,
   autoEquip,
   betaSetJob,
   betaSetLevel,
@@ -1012,13 +1012,91 @@ function Slot({ slot, id }: { slot: GearSlot; id: string | null }) {
   );
 }
 
+type Cat = "all" | "weapon" | "armor" | "top" | "mid" | "bottom" | "acc" | "potion" | "loot";
+const CATS: { id: Cat; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "weapon", label: "Weapons" },
+  { id: "armor", label: "Armor" },
+  { id: "top", label: "Hat top" },
+  { id: "mid", label: "Hat mid" },
+  { id: "bottom", label: "Hat bottom" },
+  { id: "acc", label: "Accessories" },
+  { id: "potion", label: "Potions" },
+  { id: "loot", label: "Loot & cards" },
+];
+
+function catOf(it: { slot: string }): Cat {
+  switch (it.slot) {
+    case "weapon":
+      return "weapon";
+    case "armor":
+    case "shield":
+    case "garment":
+    case "shoes":
+      return "armor";
+    case "headUpper":
+      return "top";
+    case "headMid":
+      return "mid";
+    case "headLower":
+      return "bottom";
+    case "acc":
+    case "acc1":
+    case "acc2":
+      return "acc";
+    case "use":
+      return "potion";
+    default:
+      return "loot";
+  }
+}
+
+/** Category tab strip with live counts. */
+function CatTabs({ cat, setCat, counts }: { cat: Cat; setCat: (c: Cat) => void; counts: Record<Cat, number> }) {
+  return (
+    <div className="mb-2 flex flex-wrap gap-1">
+      {CATS.map((c) => (
+        <button
+          key={c.id}
+          type="button"
+          className={`rounded-md border px-2 py-1 text-[11px] ${cat === c.id ? "border-gold bg-surface-2 text-gold" : "border-line"} ${counts[c.id] === 0 && c.id !== "all" ? "opacity-40" : ""}`}
+          onClick={() => setCat(c.id)}
+        >
+          {c.label} {counts[c.id]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function countCats(slots: string[]): Record<Cat, number> {
+  const o: Record<Cat, number> = { all: slots.length, weapon: 0, armor: 0, top: 0, mid: 0, bottom: 0, acc: 0, potion: 0, loot: 0 };
+  for (const s of slots) o[catOf({ slot: s })]++;
+  return o;
+}
+
+/** Inventory indexes in a category, best rarity first. */
+function sortedIdx(inv: { itemId: string }[], cat: Cat): number[] {
+  const idx: number[] = [];
+  inv.forEach((s, i) => {
+    const it = ITEMS[s.itemId];
+    if (it && (cat === "all" || catOf(it) === cat)) idx.push(i);
+  });
+  const rk = (i: number) => RARITY[rarityOf(ITEMS[inv[i]!.itemId]!)].rank;
+  return idx.sort((a, b) => rk(b) - rk(a) || ITEMS[inv[a]!.itemId]!.name.localeCompare(ITEMS[inv[b]!.itemId]!.name));
+}
+
 function BagWindow() {
+  const [cat, setCat] = useState<Cat>("all");
   const p = world.player;
   if (!p) return null;
+  const counts = countCats(p.inv.map((s) => ITEMS[s.itemId]?.slot ?? "etc"));
   return (
-    <Window title={`Bag ${p.inv.length}/${INV_CAP}`} onClose={() => togglePanel("inv")}>
-      <div className="grid grid-cols-4 gap-2">
-        {p.inv.map((stack, i) => {
+    <Window title={`Bag · ${p.inv.length} items (no limit)`} onClose={() => togglePanel("inv")}>
+      <CatTabs cat={cat} setCat={setCat} counts={counts} />
+      <div className="grid max-h-80 grid-cols-4 gap-2 overflow-auto">
+        {sortedIdx(p.inv, cat).map((i) => {
+          const stack = p.inv[i]!;
           const item = ITEMS[stack.itemId];
           if (!item) return null;
           return (
@@ -1128,10 +1206,21 @@ function HelpWindow() {
 }
 
 function ShopWindow() {
+  const [buyCat, setBuyCat] = useState<Cat>("all");
+  const [sellCat, setSellCat] = useState<Cat>("all");
+  const [showAll, setShowAll] = useState(false);
   const p = world.player;
   if (!p || !world.shop) return null;
-  const stock = world.shop === "smith" ? SMITH_STOCK : world.shop === "outfit" ? OUTFIT_STOCK : SUPPLY_STOCK;
+  const stock0 = world.shop === "smith" ? SMITH_STOCK : world.shop === "outfit" ? OUTFIT_STOCK : SUPPLY_STOCK;
   const title = world.shop === "smith" ? "Calder" : world.shop === "outfit" ? "Nia" : "Supplies";
+  const usable = (id: string) => {
+    const it = ITEMS[id];
+    return !!it && (showAll || canEquip(p.job, it));
+  };
+  const jobStock = stock0.filter(usable);
+  const stockCounts = countCats(jobStock.map((id) => ITEMS[id]?.slot ?? "etc"));
+  const stock = jobStock.filter((id) => buyCat === "all" || catOf(ITEMS[id]!) === buyCat);
+  const sellCounts = countCats(p.inv.map((s) => ITEMS[s.itemId]?.slot ?? "etc"));
   return (
     <Window
       title={title}
@@ -1140,8 +1229,19 @@ function ShopWindow() {
         bump();
       }}
     >
-      <p className="text-xs text-muted">{p.marks.toLocaleString()} zeny</p>
-      <ul className="mt-2 flex max-h-72 flex-col gap-1 overflow-auto">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs text-muted">{p.marks.toLocaleString()} zeny</p>
+        <label className="flex items-center gap-1 text-[11px] text-muted">
+          <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />
+          show items for other jobs
+        </label>
+      </div>
+      <p className="mt-1 text-[11px] text-gold">Showing gear for {JOBS[p.job].name}</p>
+      <div className="mt-1">
+        <CatTabs cat={buyCat} setCat={setBuyCat} counts={stockCounts} />
+      </div>
+      <ul className="flex max-h-60 flex-col gap-1 overflow-auto">
+        {stock.length === 0 && <li className="text-xs text-muted">Nothing here for your job.</li>}
         {stock.map((id) => {
           const item = ITEMS[id];
           if (!item) return null;
@@ -1174,8 +1274,12 @@ function ShopWindow() {
           Sell all junk ({junkIndexes().length})
         </button>
       </div>
-      <ul className="mt-1 flex max-h-48 flex-col gap-1 overflow-auto">
-        {p.inv.map((stack, i) => {
+      <div className="mt-1">
+        <CatTabs cat={sellCat} setCat={setSellCat} counts={sellCounts} />
+      </div>
+      <ul className="flex max-h-48 flex-col gap-1 overflow-auto">
+        {sortedIdx(p.inv, sellCat).map((i) => {
+          const stack = p.inv[i]!;
           const item = ITEMS[stack.itemId];
           if (!item) return null;
           return (
@@ -1196,32 +1300,36 @@ function ShopWindow() {
 }
 
 function StorageWindow() {
+  const [cat, setCat] = useState<Cat>("all");
   const p = world.player;
   if (!p) return null;
+  const counts = countCats([...p.inv, ...p.storage].map((s) => ITEMS[s.itemId]?.slot ?? "etc"));
+  const row = (from: "inv" | "storage", i: number) => {
+    const s = (from === "inv" ? p.inv : p.storage)[i]!;
+    const it = ITEMS[s.itemId];
+    return (
+      <button key={`${from}${i}`} type="button" title={it ? tip(it) : undefined} className="mt-1 block w-full truncate rounded-md border border-line px-2 py-2 text-left text-xs" style={{ color: rcol(it), borderColor: rcol(it) }} onClick={() => moveStorage(from, i)}>
+        {it?.name} {s.qty > 1 ? `×${s.qty}` : ""}
+      </button>
+    );
+  };
   return (
     <Window
-      title="Storage"
+      title="Storage (no limit)"
       onClose={() => {
         world.storageOpen = false;
         bump();
       }}
     >
-      <div className="grid grid-cols-2 gap-2">
+      <CatTabs cat={cat} setCat={setCat} counts={counts} />
+      <div className="grid max-h-80 grid-cols-2 gap-2 overflow-auto">
         <div>
-          <p className="text-xs text-muted">Bag</p>
-          {p.inv.map((s, i) => (
-            <button key={`i${i}`} type="button" className="mt-1 block w-full truncate rounded-md border border-line px-2 py-2 text-left text-xs" onClick={() => moveStorage("inv", i)}>
-              {ITEMS[s.itemId]?.name} {s.qty > 1 ? `×${s.qty}` : ""}
-            </button>
-          ))}
+          <p className="text-xs text-muted">Bag ({p.inv.length})</p>
+          {sortedIdx(p.inv, cat).map((i) => row("inv", i))}
         </div>
         <div>
-          <p className="text-xs text-muted">Kept</p>
-          {p.storage.map((s, i) => (
-            <button key={`s${i}`} type="button" className="mt-1 block w-full truncate rounded-md border border-line px-2 py-2 text-left text-xs" onClick={() => moveStorage("storage", i)}>
-              {ITEMS[s.itemId]?.name} {s.qty > 1 ? `×${s.qty}` : ""}
-            </button>
-          ))}
+          <p className="text-xs text-muted">Kept ({p.storage.length})</p>
+          {sortedIdx(p.storage, cat).map((i) => row("storage", i))}
         </div>
       </div>
     </Window>
