@@ -189,6 +189,8 @@ export type HotSlot = { kind: "skill"; id: SkillId } | { kind: "item"; id: strin
 export type Buff = { stat: BuffStat; amount: number; until: number };
 
 export type Player = {
+  /** item ids the hero has ever owned (hat book) */
+  seen?: string[];
   name: string;
   x: number;
   y: number;

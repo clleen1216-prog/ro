@@ -65,7 +65,7 @@ export const world = {
   dialog: null as Dialog | null,
   shop: null as null | "smith" | "outfit" | "supply",
   storageOpen: false,
-  panels: { status: false, equip: false, inv: false, skills: false, help: false, nav: false, auto: false, beta: false },
+  panels: { status: false, equip: false, inv: false, skills: false, help: false, nav: false, auto: false, beta: false, wardrobe: false },
   keys: new Set<string>(),
   qaKeys: null as Set<string> | null,
   touch: { x: 0, y: 0, attack: false },
@@ -506,6 +506,8 @@ export function addItem(itemId: string, qty: number) {
   if (!p) return false;
   const it = ITEMS[itemId];
   if (!it) return false;
+  if (!p.seen) p.seen = [];
+  if (!p.seen.includes(itemId)) p.seen.push(itemId);
   if (it.stack) {
     const stack = p.inv.find((s) => s.itemId === itemId);
     if (stack) {

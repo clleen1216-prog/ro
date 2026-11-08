@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { Backpack, Crown, CircleHelp, Compass, Shield, SlidersHorizontal, Sparkles, Swords, UserRound, Volume2, VolumeX, X } from "lucide-react";
+import { Backpack, BookOpen, Crown, CircleHelp, Compass, Shield, SlidersHorizontal, Sparkles, Swords, UserRound, Volume2, VolumeX, X } from "lucide-react";
 import { loadAll } from "@/game/assets";
 import { setMusicOn, setTrack, sfxClick, tick, trackTitle, unlock } from "@/game/audio";
 import {
@@ -29,6 +29,7 @@ import {
   sellPrice,
 } from "@/game/content";
 import { RARITY, rarityOf, weaponNote } from "@/game/gear";
+import { dropSources, isCollected, itemsForSlot, shopSource, type CodexSlot } from "@/game/codex";
 import { drawItemIcon, drawPreview, renderFrame } from "@/game/draw";
 import { cancelTravel, castSkill, holdMove, installProbe, pickAt, pointerDown, setAutoBattle, step, travelTo } from "@/game/sim";
 import type { GearSlot, HotSlot, Player, SkillId } from "@/game/types";
@@ -235,6 +236,7 @@ export function GameApp() {
       if (e.code === "KeyH") togglePanel("help");
       if (e.code === "KeyB") setAutoBattle(!world.auto.battle);
       if (e.code === "KeyN") togglePanel("nav");
+      if (e.code === "KeyW" && e.shiftKey) togglePanel("wardrobe");
       if (e.code === "KeyR" && world.player) {
         world.player.sit = !world.player.sit;
         world.player.sit && (world.path = []);
@@ -468,6 +470,9 @@ export function GameApp() {
               <IconBtn label="Job change (Beta)" onClick={() => togglePanel("beta")} active={world.panels.beta}>
                 <Crown />
               </IconBtn>
+              <IconBtn label="Fitting room & hat book (W)" onClick={() => togglePanel("wardrobe")} active={world.panels.wardrobe}>
+                <BookOpen />
+              </IconBtn>
               <IconBtn label="Auto Navigation (N)" onClick={() => togglePanel("nav")} active={Boolean(world.auto.travel)}>
                 <Compass />
               </IconBtn>
@@ -555,6 +560,7 @@ export function GameApp() {
             {world.panels.nav && <NavWindow />}
             {world.panels.auto && <AutoWindow />}
             {world.panels.beta && <BetaWindow />}
+            {world.panels.wardrobe && <WardrobeWindow />}
             {world.shop && <ShopWindow />}
             {world.storageOpen && <StorageWindow />}
           </div>
@@ -629,6 +635,128 @@ function IconBtn({ label, onClick, children, active }: { label: string; onClick:
     >
       <span className="size-5">{children}</span>
     </button>
+  );
+}
+
+const CODEX_TABS: { slot: CodexSlot; label: string }[] = [
+  { slot: "headUpper", label: "Top" },
+  { slot: "headMid", label: "Mid" },
+  { slot: "headLower", label: "Bottom" },
+  { slot: "armor", label: "Armor" },
+  { slot: "garment", label: "Garment" },
+  { slot: "shoes", label: "Shoes" },
+  { slot: "weapon", label: "Weapon" },
+  { slot: "shield", label: "Shield" },
+];
+
+function TryCanvas({ eq, dir }: { eq: Player["eq"]; dir: Player["dir"] }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const p = world.player;
+    if (ref.current && p) drawPreview(ref.current, { style: p.style, hair: p.hair, trim: p.trim, job: p.job, dir, eq });
+  });
+  return <canvas ref={ref} className="h-56 w-full" />;
+}
+
+function WardrobeWindow() {
+  const p = world.player;
+  const [tab, setTab] = useState<"hats" | "fit">("hats");
+  const [slot, setSlot] = useState<CodexSlot>("headUpper");
+  const [sel, setSel] = useState<string | null>(null);
+  const [dir, setDir] = useState<Player["dir"]>(0);
+  const [tryOn, setTryOn] = useState<Partial<Player["eq"]>>({});
+  if (!p) return null;
+  const eq = { ...p.eq, ...tryOn } as Player["eq"];
+  const tabs = tab === "hats" ? CODEX_TABS.slice(0, 3) : CODEX_TABS;
+  const curSlot = tabs.some((t) => t.slot === slot) ? slot : "headUpper";
+  const list = itemsForSlot(curSlot);
+  const got = list.filter((i) => isCollected(i.id)).length;
+  const item = sel ? ITEMS[sel] : undefined;
+  const srcs = item ? dropSources(item.id) : [];
+  const shop = item ? shopSource(item.id) : null;
+  const pick = (id: string) => {
+    setSel(id);
+    const it = ITEMS[id];
+    if (it) setTryOn((t) => ({ ...t, [it.slot as GearSlot]: id }));
+  };
+  return (
+    <Window title="Fitting room & hat book" onClose={() => togglePanel("wardrobe")}>
+      <div className="flex gap-1 text-xs">
+        {(["hats", "fit"] as const).map((t) => (
+          <button key={t} type="button" className={`rounded-md border px-2 py-1 ${tab === t ? "border-gold text-gold" : "border-line"}`} onClick={() => setTab(t)}>
+            {t === "hats" ? "Hat book" : "Fitting room"}
+          </button>
+        ))}
+        <span className="ml-auto text-muted">
+          {got}/{list.length} collected
+        </span>
+      </div>
+      <div className="mt-2 grid grid-cols-[130px_1fr] gap-2">
+        <div>
+          <TryCanvas eq={eq} dir={dir} />
+          <div className="flex justify-center gap-1">
+            {([0, 1, 3, 2] as const).map((d, i) => (
+              <button key={d} type="button" className={`rounded border px-1 text-[10px] ${dir === d ? "border-gold text-gold" : "border-line"}`} onClick={() => setDir(d)}>
+                {["Front", "Left", "Back", "Right"][i]}
+              </button>
+            ))}
+          </div>
+          <button type="button" className="mt-1 w-full rounded border border-line px-1 py-0.5 text-[10px]" onClick={() => setTryOn({})}>
+            Reset to my outfit
+          </button>
+        </div>
+        <div>
+          <div className="flex flex-wrap gap-1">
+            {tabs.map((t) => (
+              <button key={t.slot} type="button" className={`rounded-md border px-1.5 py-0.5 text-[11px] ${curSlot === t.slot ? "border-gold text-gold" : "border-line"}`} onClick={() => { setSlot(t.slot); setSel(null); }}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <div className="mt-1 grid max-h-40 grid-cols-5 gap-1 overflow-auto">
+            {list.map((it) => (
+              <button
+                key={it.id}
+                type="button"
+                title={`${it.name}${isCollected(it.id) ? "" : " (not collected)"}`}
+                style={{ borderColor: sel === it.id ? undefined : rcol(it) }}
+                className={`relative rounded-md border bg-surface-2 p-1 ${sel === it.id ? "border-gold" : ""} ${isCollected(it.id) ? "" : "opacity-45"}`}
+                onClick={() => pick(it.id)}
+              >
+                <Icon id={it.id} />
+                {isCollected(it.id) && <span className="absolute right-0.5 top-0 text-[9px] text-gold">✓</span>}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+      {item && (
+        <div className="mt-2 border-t border-line pt-2 text-xs">
+          <p style={{ color: rcol(item) }}>{item.name}{isCollected(item.id) ? "" : " · not collected yet"}</p>
+          <p className="text-muted">{tip(item)}</p>
+          {shop && <p className="mt-1">Sold at the {shop}.</p>}
+          {srcs.length === 0 && !shop && <p className="mt-1 text-muted">No known source.</p>}
+          {srcs.slice(0, 6).map((s) => (
+            <div key={s.monsterId} className="mt-1 flex items-center justify-between gap-2 rounded border border-line bg-surface-2 px-2 py-1">
+              <span>
+                {s.boss ? "★ " : s.mini ? "◆ " : ""}{s.monster} · {s.rate}% · {s.maps.map((m) => m.name).join(", ")}
+              </span>
+              <button
+                type="button"
+                className="rounded border border-gold px-2 py-0.5 text-gold"
+                onClick={() => {
+                  const m = s.maps.find((x) => x.id !== world.mapId) ?? s.maps[0]!;
+                  travelTo(m.id);
+                  togglePanel("wardrobe");
+                }}
+              >
+                {s.maps.some((x) => x.id === world.mapId) && s.maps.length === 1 ? "Here" : "Navigate"}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </Window>
   );
 }
 
