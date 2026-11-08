@@ -55,6 +55,7 @@ export const world = {
   drops: [] as Drop[],
   floats: [] as FloatText[],
   crits: [] as CritFx[],
+  vfx: [] as import("@/game/vfx").Vfx[],
   hitStop: 0,
   bossBanner: null as { text: string; sub: string; t: number } | null,
   capSeen: { aspd: false, crit: false } as { aspd: boolean; crit: boolean },

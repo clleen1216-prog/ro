@@ -5,6 +5,7 @@
 // 3x "event rate" so a session of play actually levels you. Card drop rates are
 // boosted well above the real 0.01% so you can see one in a sitting.
 
+import { BOSS_DEFS } from "@/game/bosses";
 import type { ItemDef } from "@/game/content";
 import type { Behavior, IconKind } from "@/game/types";
 
@@ -26,6 +27,10 @@ export type MonsterDef = {
   /** procedural look id (monsters without PNG art) */
   look?: string;
   boss?: boolean;
+  /** mid-tier boss: bigger bar, recoloured model, fast respawn */
+  mini?: boolean;
+  /** colour wash over the model */
+  tint?: string;
   fly?: boolean;
   /** seconds before respawn */
   respawn?: number;
@@ -408,7 +413,7 @@ export const MONSTER_DEFS: Record<string, MonsterDef> = {
   },
   "orc-hero": {
     name: "Orc Hero", level: 36, hp: 7200, atk: 100, def: 32, mdef: 18, exp: 5200, jexp: 3200,
-    behavior: "aggressive", speed: 76, aggro: 210, draw: 150, look: "orchero", boss: true, respawn: 150, zeny: [900, 1500], tag: "Boss · Demi-Human · Earth 2",
+    behavior: "aggressive", speed: 76, aggro: 210, draw: 150, look: "orchero", boss: true, respawn: 55, zeny: [900, 1500], tag: "Boss · Demi-Human · Earth 2",
     drops: [
       { id: "orc-tusk", rate: 100 }, { id: "oridecon", rate: 60 }, { id: "white-potion", rate: 40 },
       { id: "blue-potion", rate: 30 }, { id: "claymore", rate: 8 }, { id: "staff-of-soul", rate: 8 },
@@ -418,7 +423,7 @@ export const MONSTER_DEFS: Record<string, MonsterDef> = {
   },
   "golden-bug": {
     name: "Golden Thief Bug", level: 24, hp: 2600, atk: 52, def: 18, mdef: 20, exp: 1500, jexp: 900,
-    behavior: "aggressive", speed: 84, aggro: 200, draw: 108, look: "goldbug", boss: true, respawn: 90, zeny: [400, 700], tag: "Boss · Insect · Fire 1",
+    behavior: "aggressive", speed: 84, aggro: 200, draw: 108, look: "goldbug", boss: true, respawn: 35, zeny: [400, 700], tag: "Boss · Insect · Fire 1",
     drops: [
       { id: "gold-nugget", rate: 70 }, { id: "white-potion", rate: 12 }, { id: "yellow-potion", rate: 25 },
       { id: "blue-potion", rate: 14 }, { id: "boots", rate: 6 }, { id: "great-bow", rate: 2.5 },
@@ -427,6 +432,8 @@ export const MONSTER_DEFS: Record<string, MonsterDef> = {
     ],
   },
 };
+
+Object.assign(MONSTER_DEFS, BOSS_DEFS);
 
 // Fancy headgear now drops from monsters that suit it (rate is a percentage).
 const HAT_DROPS: Record<string, [string, number][]> = {

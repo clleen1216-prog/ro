@@ -1,3 +1,4 @@
+import { drawVfx } from "@/game/vfx";
 import { rarityColor, RARITY, rarityOf } from "@/game/gear";
 import { buildingSprite, drawBlockActor, propSprite, type ActorParts } from "@/game/blockart";
 import { B, EPX, PX, blit, castShadow, hash, mk, setEntityPx, tileTexture } from "@/game/blocky";
@@ -563,7 +564,7 @@ function drawMonster(
     ctx.translate(Math.round(x), Math.round(y - (fx.lift ?? 0) - flyBob));
     if (fx.rot) ctx.rotate(fx.rot);
     ctx.scale(fx.scaleX ?? 1, fx.scaleY ?? 1);
-    drawCreature(ctx, def.look, t, moving, dir, h, flash, fx.atk ?? -1);
+    drawCreature(ctx, def.look, t, moving, dir, h, flash, fx.atk ?? -1, def.tint);
   }
   ctx.restore();
 }
@@ -871,9 +872,9 @@ export function renderFrame(canvas: HTMLCanvasElement, dt: number) {
           alpha: Math.min(1, 0.3 + e),
         });
         const top = m.y - (def.draw + (def.fly ? 18 : 0)) * (EPX / 3);
-        label(ctx, `${def.boss ? "★ " : ""}${def.name}`, m.x, top - 6, def.boss ? "#ffd86a" : "#f6f0e4");
-        if (m.hp < m.maxHp || targeted || def.boss) {
-          const bw = def.boss ? 56 : 36;
+        label(ctx, `${def.boss ? "★ " : def.mini ? "◆ " : ""}${def.name}`, m.x, top - 6, def.boss ? "#ffd86a" : def.mini ? "#8fd8ff" : "#f6f0e4");
+        if (m.hp < m.maxHp || targeted || def.boss || def.mini) {
+          const bw = def.boss ? 56 : def.mini ? 46 : 36;
           ctx.fillStyle = "rgba(0,0,0,0.55)";
           ctx.fillRect(m.x - bw / 2 - 1, top - 1, bw + 2, 6);
           ctx.fillStyle = "#3a1a1a";
@@ -981,6 +982,7 @@ export function renderFrame(canvas: HTMLCanvasElement, dt: number) {
     }
   }
   drawShots(ctx);
+  drawVfx(ctx);
 
   for (const c of world.crits) {
     const k = c.t / 0.45;

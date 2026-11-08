@@ -1,6 +1,7 @@
 // Item rarity, weapon-type balance and gear scoring (iRO-style trade-offs).
 
 import { JOBS, type ItemDef } from "@/game/content";
+import { MONSTER_DEFS } from "@/game/rodata";
 import type { JobId, WeaponKind } from "@/game/types";
 
 export type Rarity = "normal" | "rare" | "hero" | "mystic" | "legendary";
@@ -19,7 +20,10 @@ const HERO_CARDS = new Set(["zombie-card", "skeleton-card", "goblin-card", "orc-
 
 export function rarityOf(it: ItemDef): Rarity {
   if (it.slot === "use") return "normal";
-  if (it.id.endsWith("-card")) return LEGEND_CARDS.has(it.id) ? "legendary" : HERO_CARDS.has(it.id) ? "hero" : "rare";
+  if (it.id.endsWith("-card")) {
+    const md = MONSTER_DEFS[it.id.slice(0, -5)];
+    return LEGEND_CARDS.has(it.id) || md?.boss ? "legendary" : HERO_CARDS.has(it.id) || md?.mini ? "hero" : "rare";
+  }
   const v = it.price;
   if (it.slot === "etc") return v >= 1000 ? "hero" : v >= 100 ? "rare" : "normal";
   return v >= 10000 ? "legendary" : v >= 4000 ? "mystic" : v >= 1000 ? "hero" : v >= 250 ? "rare" : "normal";

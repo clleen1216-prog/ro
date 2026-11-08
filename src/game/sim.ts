@@ -1,3 +1,4 @@
+import { castVfx, stepVfx } from "@/game/vfx";
 import { EPX } from "@/game/blocky";
 import { sfxBow, sfxCrit, sfxCast, sfxDown, sfxFoot, sfxHeal, sfxHit, sfxMiss, sfxPickup, sfxPortal, sfxSwing } from "@/game/audio";
 import { ITEMS, MONSTERS, SKILLS, TILE, getMap, isBlocked } from "@/game/content";
@@ -367,7 +368,7 @@ function hurtNow(m: Monster, dmg: number, color: string) {
   if (m.hp <= 0) {
     m.alive = false;
     m.dyingT = 0.6;
-    m.deadUntil = st.respawn ?? 10;
+    m.deadUntil = (st.respawn ?? 10) * (st.boss || st.mini ? 1 : 0.6);
     grantKill(m.kind, m.x, m.y);
     world.targetId = world.targetId === m.id ? null : world.targetId;
   }
@@ -549,6 +550,7 @@ function castSkillInner(id: SkillId) {
       });
     }
   }
+  castVfx(id, sk, p, target ?? null, later);
   if (sk.fx && sk.fx.t !== "passive") {
     if (!runFx(sk, lv, d, target)) p.sp += cost;
   } else if (id === "firstAid") healSelf(8 + p.baseLevel * 3);
@@ -1285,6 +1287,7 @@ export function step(dt0: number) {
     world.bossBanner.t += dt0;
     if (world.bossBanner.t > 3.4) world.bossBanner = null;
   }
+  stepVfx(dt0);
   for (const c of world.crits) c.t += dt0;
   world.crits = world.crits.filter((c) => c.t < 0.45);
   runLater(dt);

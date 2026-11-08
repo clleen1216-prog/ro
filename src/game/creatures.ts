@@ -428,13 +428,22 @@ export function hasLook(look: string | undefined): look is string {
   return Boolean(look && LOOKS[look]);
 }
 
-export function drawCreature(ctx: Ctx, look: string, t: number, moving: boolean, dir: number, size: number, flash: number, atk = -1) {
+export function drawCreature(ctx: Ctx, look: string, t: number, moving: boolean, dir: number, size: number, flash: number, atk = -1, tint?: string) {
   const fn = LOOKS[look];
   if (!fn) return;
   const { c } = scratch();
   const f = Math.max(0.7, size / 66);
   if (dir === 1) c.scale(-1, 1);
   fn({ c, f, t, m: moving ? 1 : 0, v: dir === 3 ? "b" : dir === 0 ? "f" : "s", atk });
+  if (tint) {
+    c.save();
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.globalCompositeOperation = "source-atop";
+    c.globalAlpha = 0.42;
+    c.fillStyle = tint;
+    c.fillRect(0, 0, 72, 72);
+    c.restore();
+  }
   castShadowScratch(ctx);
   blitScratch(ctx, flash);
 }
