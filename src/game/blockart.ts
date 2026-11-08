@@ -513,6 +513,268 @@ function face(c: Ctx, dir: number, tn: number) {
   }
 }
 
+/** Extra top-slot headgear (RO-style fancy hats). Head spans x -7..7, hair top y -28, brow y -25. */
+function drawTopHat(c: Ctx, hat: string, t: string, dir: number, side: boolean) {
+  const d = shade(t, -0.3);
+  const l = shade(t, 0.3);
+  switch (hat) {
+    case "bunny":
+      if (side) {
+        B(c, -4, -42, 3, 15, t, 0.08);
+        B(c, 0, -40, 3, 13, shade(t, -0.08), 0.08);
+        B(c, -3, -40, 1, 9, "#f4a0b8", 0, false);
+      } else {
+        B(c, -6, -43, 4, 16, t, 0.08);
+        B(c, 2, -41, 4, 14, t, 0.08);
+        B(c, -5, -41, 2, 10, "#f4a0b8", 0, false);
+        B(c, 3, -39, 2, 9, "#f4a0b8", 0, false);
+      }
+      B(c, -7, -28, 14, 2, d, 0, false);
+      break;
+    case "cat":
+      if (side) {
+        B(c, -3, -33, 5, 6, t, 0.08);
+        B(c, -2, -31, 2, 3, "#f4a0b8", 0, false);
+        B(c, 2, -32, 4, 5, shade(t, -0.1), 0.08);
+      } else {
+        B(c, -8, -34, 5, 7, t, 0.08);
+        B(c, 3, -34, 5, 7, t, 0.08);
+        B(c, -7, -32, 2, 4, "#f4a0b8", 0, false);
+        B(c, 4, -32, 2, 4, "#f4a0b8", 0, false);
+        B(c, -8, -36, 2, 2, t, 0, false);
+        B(c, 6, -36, 2, 2, t, 0, false);
+      }
+      break;
+    case "poring":
+      B(c, -7, -33, 14, 7, t, 0.08);
+      B(c, -5, -35, 10, 3, t, 0.08);
+      B(c, -4, -34, 3, 1, l, 0, false);
+      if (dir !== 3) {
+        c.fillStyle = "#2a1a20";
+        c.fillRect(dir === 0 ? -3 : 0, -31, 2, 2);
+        c.fillRect(dir === 0 ? 2 : 4, -31, 2, 2);
+        c.fillRect(dir === 0 ? -1 : 2, -28, 3, 1);
+      }
+      break;
+    case "angel":
+      B(c, -6, -38, 12, 1, "#ffe27a", 0, false);
+      B(c, -7, -37, 1, 2, "#ffe27a", 0, false);
+      B(c, 6, -37, 1, 2, "#ffe27a", 0, false);
+      B(c, -6, -35, 12, 1, "#ffd23a", 0, false);
+      if (!side) {
+        B(c, -13, -28, 6, 4, "#ffffff", 0.05);
+        B(c, 7, -28, 6, 4, "#ffffff", 0.05);
+        B(c, -12, -30, 3, 2, "#e8eef8", 0, false);
+        B(c, 9, -30, 3, 2, "#e8eef8", 0, false);
+      } else B(c, -10, -28, 6, 4, "#ffffff", 0.05);
+      break;
+    case "devil":
+      if (side) {
+        B(c, -2, -34, 3, 7, t, 0.08);
+        B(c, -1, -37, 2, 3, t, 0, false);
+      } else {
+        B(c, -7, -34, 3, 7, t, 0.08);
+        B(c, 4, -34, 3, 7, t, 0.08);
+        B(c, -8, -37, 2, 3, t, 0, false);
+        B(c, 6, -37, 2, 3, t, 0, false);
+      }
+      break;
+    case "crown":
+      B(c, -6, -31, 12, 4, t, 0.06);
+      B(c, -6, -34, 2, 3, t, 0, false);
+      B(c, -1, -36, 2, 5, t, 0, false);
+      B(c, 4, -34, 2, 3, t, 0, false);
+      B(c, -6, -30, 12, 1, shade(t, 0.35), 0, false);
+      if (dir === 0) {
+        B(c, -1, -30, 2, 2, "#e04a5a", 0, false);
+        B(c, -5, -29, 1, 1, "#4a8ae0", 0, false);
+        B(c, 4, -29, 1, 1, "#4a8ae0", 0, false);
+      }
+      break;
+    case "santa":
+      B(c, -7, -32, 14, 5, t, 0.08);
+      B(c, -5, -35, 10, 3, t, 0.08);
+      B(c, -8, -27, 16, 2, "#f6f6f6", 0.05);
+      B(c, side ? -9 : 4, -36, 5, 5, t, 0.08, false);
+      B(c, side ? -11 : 7, -34, 4, 4, "#ffffff", 0.05);
+      break;
+    case "tophat":
+      B(c, -10, -28, 20, 2, t, 0.06);
+      B(c, -6, -38, 12, 11, t, 0.06);
+      B(c, -6, -31, 12, 2, "#c33a3a", 0, false);
+      B(c, -5, -37, 2, 6, l, 0, false);
+      break;
+    case "straw":
+      B(c, -13, -27, 26, 2, t, 0.1);
+      B(c, -7, -33, 14, 7, shade(t, 0.06), 0.1);
+      for (let i = -12; i < 12; i += 3) B(c, i, -27, 1, 2, d, 0, false);
+      B(c, -7, -29, 14, 1, "#b8452a", 0, false);
+      break;
+    case "beret":
+      B(c, -8, -31, 15, 4, t, 0.08);
+      B(c, -6, -33, 11, 2, t, 0.08);
+      B(c, 1, -35, 2, 2, d, 0, false);
+      break;
+    case "pirate":
+      B(c, -11, -29, 22, 3, t, 0.05);
+      B(c, -7, -35, 14, 6, t, 0.05);
+      B(c, -11, -31, 3, 3, t, 0, false);
+      B(c, 8, -31, 3, 3, t, 0, false);
+      if (dir === 0) {
+        B(c, -1, -33, 3, 2, "#f4f0e8", 0, false);
+        B(c, -2, -31, 5, 1, "#f4f0e8", 0, false);
+      }
+      break;
+    case "viking":
+      B(c, -7, -31, 14, 5, "#aeb8c4", 0.08);
+      B(c, -7, -26, 14, 1, "#7a8290", 0, false);
+      if (dir === 0) B(c, -1, -25, 2, 4, "#9aa4b0", 0, false);
+      if (side) {
+        B(c, -1, -34, 3, 4, "#f0ead8", 0.04);
+        B(c, 0, -38, 3, 5, "#f0ead8", 0, false);
+        B(c, 2, -40, 2, 3, "#f0ead8", 0, false);
+      } else {
+        B(c, -11, -33, 4, 5, "#f0ead8", 0.04);
+        B(c, 7, -33, 4, 5, "#f0ead8", 0.04);
+        B(c, -12, -38, 3, 6, "#f0ead8", 0, false);
+        B(c, 9, -38, 3, 6, "#f0ead8", 0, false);
+      }
+      break;
+    case "flower": {
+      B(c, -7, -28, 14, 2, "#4a8a3a", 0.1, false);
+      const cols = [t, "#fff0a0", t, "#ffffff", t];
+      for (let i = 0; i < 5; i++) B(c, -6 + i * 3, -30 - (i % 2), 3, 3, cols[i]!, 0.1, false);
+      break;
+    }
+    case "valk":
+      B(c, -7, -31, 14, 5, t, 0.06);
+      B(c, -7, -26, 14, 1, shade(t, -0.25), 0, false);
+      B(c, -1, -33, 2, 3, "#e4b15a", 0, false);
+      if (side) {
+        B(c, -11, -34, 6, 7, "#ffffff", 0.05);
+        B(c, -13, -37, 4, 4, "#e8eef8", 0, false);
+      } else {
+        B(c, -13, -35, 6, 8, "#ffffff", 0.05);
+        B(c, 7, -35, 6, 8, "#ffffff", 0.05);
+        B(c, -15, -38, 4, 4, "#e8eef8", 0, false);
+        B(c, 11, -38, 4, 4, "#e8eef8", 0, false);
+      }
+      break;
+    case "hardhat":
+      B(c, -7, -31, 14, 5, t, 0.08);
+      B(c, -1, -34, 3, 4, shade(t, 0.1), 0, false);
+      if (dir === 0) B(c, -8, -27, 16, 1, d, 0, false);
+      else if (side) B(c, 1, -27, 8, 1, d, 0, false);
+      break;
+  }
+}
+
+function drawMidHat(c: Ctx, hat: string, t: string, dir: number, side: boolean) {
+  if (dir === 3 && hat !== "goggles" && hat !== "eyepatch") return;
+  const ex = (dx: number) => (dir === 0 ? dx : dx + 4);
+  switch (hat) {
+    case "monocle":
+      if (dir === 3) return;
+      c.fillStyle = t;
+      c.fillRect(ex(1), -24, 5, 1);
+      c.fillRect(ex(1), -20, 5, 1);
+      c.fillRect(ex(1), -23, 1, 3);
+      c.fillRect(ex(5), -23, 1, 3);
+      c.fillStyle = "rgba(200,230,255,0.45)";
+      c.fillRect(ex(2), -23, 3, 3);
+      if (dir === 0) c.fillRect(5, -19, 1, 5);
+      break;
+    case "eyepatch":
+      if (dir === 3) B(c, -7, -26, 14, 1, "#1a1a1a", 0, false);
+      else {
+        B(c, -7, -26, 14, 1, "#1a1a1a", 0, false);
+        B(c, ex(1), -24, 5, 5, t, 0, false);
+        c.fillStyle = "#444";
+        c.fillRect(ex(2), -23, 1, 1);
+      }
+      break;
+    case "goggles":
+      B(c, -7, -27, 14, 1, "#6a4a2a", 0, false);
+      if (dir === 3) break;
+      c.fillStyle = "#6ac0e8";
+      if (dir === 0) {
+        c.fillRect(-5, -30, 4, 3);
+        c.fillRect(1, -30, 4, 3);
+        c.fillStyle = "#ffffff";
+        c.fillRect(-4, -30, 1, 1);
+        c.fillRect(2, -30, 1, 1);
+      } else {
+        c.fillRect(0, -30, 4, 3);
+        c.fillStyle = "#ffffff";
+        c.fillRect(1, -30, 1, 1);
+      }
+      break;
+    case "starmask":
+      if (dir === 3) return;
+      B(c, dir === 0 ? -7 : -1, -24, dir === 0 ? 14 : 8, 4, t, 0, false);
+      c.fillStyle = "#101018";
+      if (dir === 0) {
+        c.fillRect(-4, -23, 3, 2);
+        c.fillRect(1, -23, 3, 2);
+      } else c.fillRect(2, -23, 3, 2);
+      c.fillStyle = "#e8e8f4";
+      c.fillRect(dir === 0 ? -1 : 0, -25, 2, 1);
+      c.fillRect(dir === 0 ? 5 : 5, -25, 1, 1);
+      break;
+    case "clown":
+      if (dir === 3) return;
+      B(c, dir === 0 ? -1 : 5, -20, 3, 3, t, 0.05);
+      c.fillStyle = "#ffb0b0";
+      c.fillRect(dir === 0 ? -1 : 5, -20, 1, 1);
+      break;
+  }
+  void side;
+}
+
+function drawLowerHat(c: Ctx, hat: string, t: string, dir: number, side: boolean) {
+  if (dir === 3) return;
+  switch (hat) {
+    case "mustache":
+      if (side) B(c, 2, -18, 5, 2, t, 0, false);
+      else {
+        B(c, -5, -18, 10, 2, t, 0, false);
+        B(c, -6, -17, 2, 2, t, 0, false);
+        B(c, 4, -17, 2, 2, t, 0, false);
+      }
+      break;
+    case "beard":
+      if (side) B(c, 0, -18, 7, 6, t, 0.12);
+      else B(c, -6, -18, 12, 6, t, 0.12);
+      B(c, side ? 2 : -1, -17, 3, 1, "#2a1a14", 0, false);
+      break;
+    case "lollipop":
+      if (side) {
+        B(c, 5, -17, 1, 4, "#f4efe0", 0, false);
+        B(c, 4, -14, 5, 5, t, 0.05);
+        B(c, 5, -13, 2, 1, "#ffffff", 0, false);
+      } else {
+        B(c, 2, -17, 1, 4, "#f4efe0", 0, false);
+        B(c, 1, -14, 6, 6, t, 0.05);
+        B(c, 2, -13, 2, 1, "#ffffff", 0, false);
+        B(c, 3, -11, 2, 1, "#ffffff", 0, false);
+      }
+      break;
+    case "rose":
+      B(c, side ? 3 : 2, -17, 1, 4, "#3a7a3a", 0, false);
+      B(c, side ? 4 : 3, -19, 3, 3, t, 0.08);
+      B(c, side ? 5 : 4, -18, 1, 1, shade(t, 0.4), 0, false);
+      break;
+    case "fangs":
+      c.fillStyle = "#ffffff";
+      if (side) c.fillRect(3, -17, 1, 2);
+      else {
+        c.fillRect(-3, -17, 1, 2);
+        c.fillRect(2, -17, 1, 2);
+      }
+      break;
+  }
+}
+
 function headgear(c: Ctx, p: ActorParts, dir: number) {
   const side = dir === 1 || dir === 2;
   const jl = JOB_LOOK[p.job ?? ""];
@@ -562,6 +824,7 @@ function headgear(c: Ctx, p: ActorParts, dir: number) {
     B(c, -5, -33, 10, 7, shade(u.tint, 0.05), 0.1);
     B(c, -5, -28, 10, 1, shade(u.tint, -0.3), 0, false);
   }
+  if (u) drawTopHat(c, u.hat ?? "", u.tint, dir, side);
   const m = p.mid ?? jl?.mid;
   if (m?.hat === "glasses" && dir !== 3) {
     c.fillStyle = m.tint;
@@ -597,6 +860,9 @@ function headgear(c: Ctx, p: ActorParts, dir: number) {
       B(c, 6, -25, 4, 4, l.tint, 0.1);
     } else B(c, -9, -25, 4, 4, l.tint, 0.1);
   }
+  if (l) drawLowerHat(c, l.hat ?? "", l.tint, dir, side);
+  const mm = p.mid ?? jl?.mid;
+  if (mm) drawMidHat(c, mm.hat ?? "", mm.tint, dir, side);
 }
 
 function weapon(c: Ctx, w: NonNullable<ActorParts["weapon"]>, x: number, y: number, ang: number, xs: number, pull = 0, glow = 0, nock = false) {

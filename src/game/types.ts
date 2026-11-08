@@ -97,7 +97,47 @@ export type SkillDef = {
   target: "self" | "enemy" | "area" | "passive";
   fx?: SkillFx;
 };
-export type HatKind = "cap" | "circlet" | "brim" | "feather" | "glasses" | "mask" | "scarf" | "ribbon";
+export type HatKind =
+  | "cap"
+  | "circlet"
+  | "brim"
+  | "feather"
+  | "glasses"
+  | "mask"
+  | "scarf"
+  | "ribbon"
+  // top
+  | "bunny"
+  | "cat"
+  | "poring"
+  | "angel"
+  | "devil"
+  | "crown"
+  | "santa"
+  | "tophat"
+  | "straw"
+  | "beret"
+  | "pirate"
+  | "viking"
+  | "flower"
+  | "valk"
+  | "hardhat"
+  | "wizard"
+  | "helm"
+  | "headband"
+  | "bandana"
+  // middle
+  | "monocle"
+  | "eyepatch"
+  | "goggles"
+  | "starmask"
+  | "clown"
+  // bottom
+  | "mustache"
+  | "beard"
+  | "lollipop"
+  | "rose"
+  | "fangs";
 export type IconKind =
   | "cap"
   | "circlet"

@@ -1305,13 +1305,21 @@ export function step(dt0: number) {
   const d = derive(p);
   if (p.hp > d.maxHp) p.hp = d.maxHp;
   if (p.sp > d.maxSp) p.sp = d.maxSp;
-  const braced = p.buffs.some((b) => b.stat === "def");
-  p.hp = Math.min(d.maxHp, p.hp + dt * (braced ? 1.6 : 0.35));
-  p.sp = Math.min(d.maxSp, p.sp + dt * 0.55);
-  if (p.sit || p.feign > 0) {
-    p.hp = Math.min(d.maxHp, p.hp + dt * 4);
-    p.sp = Math.min(d.maxSp, p.sp + dt * 3);
-  }
+  // Regeneration scales with max HP/SP, VIT/INT and job. Resting is much faster.
+  const rest = p.sit || p.feign > 0 ? 5 : 1;
+  p.hp = Math.min(d.maxHp, p.hp + dt * d.hpRegen * rest);
+  p.sp = Math.min(d.maxSp, p.sp + dt * d.spRegen * rest);
+  // announce when a stat hits its hard limit
+  const caps = world.capSeen;
+  const noteCap = (key: "aspd" | "crit", on: boolean, msg: string) => {
+    if (on && !caps[key]) {
+      log(msg);
+      float(p.x, p.y - 80, msg.replace(/!$/, "").toUpperCase(), "#ffcf3a", true);
+    }
+    caps[key] = on;
+  };
+  noteCap("aspd", d.aspdCap, "Attack speed at its limit!");
+  noteCap("crit", d.critCap, "Critical rate at its limit!");
 
   const keys = held();
   let mx = 0;

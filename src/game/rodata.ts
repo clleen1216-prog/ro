@@ -166,6 +166,39 @@ const ITEM_LIST: ItemDef[] = [
   gear("ribbon", "Ribbon", "headUpper", "ribbon", "#d4687a", 800, "A big red bow. Slightly mind-sharpening.", { def: 1, mdef: 3, int: 1, hat: "ribbon" }),
   gear("sunglasses", "Sunglasses", "headMid", "glasses", "#2a2a32", 1000, "Dark lenses.", { def: 1, hat: "glasses" }),
 
+  // ── Headgear: top ─────────────────────────────────────────────
+  gear("straw-hat", "Straw Hat", "headUpper", "brim", "#e0c070", 600, "A wide straw hat. Cool in summer.", { def: 2, hat: "straw" }),
+  gear("hard-hat", "Hard Hat", "headUpper", "cap", "#f0c030", 900, "A yellow safety helmet.", { def: 6, hat: "hardhat" }),
+  gear("bandana", "Bandana", "headUpper", "ribbon", "#c33a3a", 700, "A knotted cloth. Light on the head.", { def: 2, agi: 1, hat: "bandana" }),
+  gear("headband", "Headband", "headUpper", "ribbon", "#f4f0e8", 900, "A white training band.", { def: 2, str: 1, hat: "headband" }),
+  gear("beret", "Beret", "headUpper", "cap", "#a8384a", 1200, "A soft wool beret.", { def: 2, int: 1, hat: "beret" }),
+  gear("bunny-band", "Bunny Band", "headUpper", "ribbon", "#f6e9ee", 1800, "Long floppy ears on a band.", { def: 1, mdef: 2, agi: 1, int: 1, hat: "bunny" }),
+  gear("cat-ears", "Cat Ears", "headUpper", "ribbon", "#c9a278", 2200, "A band with two twitchy ears.", { def: 1, agi: 2, hat: "cat" }),
+  gear("flower-wreath", "Flower Wreath", "headUpper", "ribbon", "#ff9ac0", 2800, "Blossoms woven into a green ring.", { mdef: 4, int: 1, luk: 1, hat: "flower" }),
+  gear("poring-hat", "Poring Hat", "headUpper", "cap", "#ffa0b8", 3000, "A smiling pink blob. Surprisingly lucky.", { def: 3, vit: 1, luk: 2, hat: "poring" }),
+  gear("santa-hat", "Santa Hat", "headUpper", "cap", "#d83a3a", 2600, "Red, fluffy and festive.", { def: 2, luk: 2, hat: "santa" }),
+  gear("top-hat", "Top Hat", "headUpper", "brim", "#2a2a32", 3400, "A gentleman's silk hat.", { def: 3, dex: 1, luk: 1, hat: "tophat" }),
+  gear("wizard-hat", "Wizard Hat", "headUpper", "brim", "#4a44b8", 4200, "A tall pointed hat humming with magic.", { def: 3, mdef: 8, int: 2, hat: "wizard", jobs: ["mage", "acolyte", "novice"] }),
+  gear("pirate-hat", "Pirate Hat", "headUpper", "brim", "#25252d", 5200, "A tricorn with a grinning skull.", { def: 5, str: 1, dex: 1, hat: "pirate" }),
+  gear("viking-helm", "Viking Helm", "headUpper", "cap", "#aeb8c4", 7500, "Iron cap with two long horns.", { def: 11, str: 2, vit: 1, hat: "viking", jobs: ["swordman", "merchant"] }),
+  gear("crusader-helm", "Crusader Helm", "headUpper", "cap", "#3a5ab0", 8800, "A blue-crested great helm.", { def: 12, vit: 2, str: 1, hat: "helm", jobs: ["swordman"] }),
+  gear("angel-halo", "Angel Halo", "headUpper", "ribbon", "#ffe27a", 9000, "A ring of light and tiny wings.", { def: 3, mdef: 8, int: 2, luk: 1, hat: "angel" }),
+  gear("devil-horns", "Devil Horns", "headUpper", "ribbon", "#a82a2a", 9000, "Small, sharp, and a little smug.", { def: 3, atk: 6, str: 2, hat: "devil" }),
+  gear("gold-crown", "Gold Crown", "headUpper", "ribbon", "#e4b15a", 16000, "A jeweled crown fit for a king.", { def: 8, mdef: 6, str: 1, int: 1, dex: 1, hat: "crown" }),
+  gear("valkyrie-helm", "Valkyrie Helm", "headUpper", "cap", "#d9dde6", 22000, "A winged helm that sings in the wind.", { def: 14, mdef: 10, str: 2, agi: 2, dex: 2, hat: "valk" }),
+  // ── Headgear: middle ──────────────────────────────────────────
+  gear("clown-nose", "Clown Nose", "headMid", "glasses", "#d83a3a", 300, "Honk.", { luk: 1, hat: "clown" }),
+  gear("eyepatch", "Eyepatch", "headMid", "glasses", "#1a1a1a", 1200, "Mysterious. Sharpens the other eye.", { dex: 1, luk: 1, hat: "eyepatch" }),
+  gear("monocle", "Monocle", "headMid", "glasses", "#e4b15a", 1500, "A gold-rimmed lens on a chain.", { int: 1, dex: 1, hat: "monocle" }),
+  gear("goggles", "Goggles", "headMid", "glasses", "#8a6a3a", 2400, "Brass goggles with blue lenses.", { def: 2, dex: 1, agi: 1, hat: "goggles" }),
+  gear("star-mask", "Star Mask", "headMid", "glasses", "#7a3ab0", 4000, "A masquerade mask with a silver star.", { def: 2, mdef: 3, luk: 2, hat: "starmask" }),
+  // ── Headgear: bottom ──────────────────────────────────────────
+  gear("lollipop", "Lollipop", "headLower", "ribbon", "#ff6a9a", 400, "Sweet and sticky.", { luk: 1, hat: "lollipop" }),
+  gear("mustache", "Mustache", "headLower", "ribbon", "#3a2a1a", 500, "A curled false mustache.", { def: 1, str: 1, hat: "mustache" }),
+  gear("beard", "Beard", "headLower", "ribbon", "#8a6a3a", 900, "A thick, warm beard.", { def: 1, vit: 1, hat: "beard" }),
+  gear("rose", "Rose", "headLower", "ribbon", "#d82a4a", 1500, "A red rose held in the teeth.", { mdef: 2, luk: 1, hat: "rose" }),
+  gear("vampire-fangs", "Vampire Fangs", "headLower", "ribbon", "#ffffff", 3600, "Two very white, very pointy teeth.", { atk: 3, str: 1, luk: 1, hat: "fangs" }),
+
   // ── High tier ──────────────────────────────────────────────────
   gear("claymore", "Claymore", "weapon", "sword", "#e7ecf4", 9000, "A great hand-and-a-half sword.", { atk: 52, str: 2, weapon: "sword", range: 58, jobs: ["swordman"] }),
   gear("staff-of-soul", "Staff of Soul", "weapon", "staff", "#c27ae0", 8200, "A staff humming with borrowed spirit.", { atk: 4, matk: 48, int: 3, weapon: "staff", range: 172, jobs: ["mage"] }),
@@ -409,6 +442,9 @@ export const SHOP_ARMOR = [
   "jacket", "padded-armor", "chain-mail", "silk-robe", "hood", "muffler", "manteau",
   "sandals", "shoes", "boots", "greaves", "guard", "shield", "full-plate", "saint-robe", "ranger-coat", "earring",
   "hat", "cap", "helm", "ribbon", "sunglasses", "clip", "glove", "rosary",
+  "straw-hat", "hard-hat", "bandana", "headband", "beret", "bunny-band", "cat-ears", "flower-wreath", "poring-hat", "santa-hat", "top-hat",
+  "wizard-hat", "pirate-hat", "viking-helm", "crusader-helm", "angel-halo", "devil-horns", "gold-crown", "valkyrie-helm",
+  "clown-nose", "eyepatch", "monocle", "goggles", "star-mask", "lollipop", "mustache", "beard", "rose", "vampire-fangs",
 ];
 export const SHOP_TOOLS = [
   "red-potion", "orange-potion", "yellow-potion", "white-potion", "blue-potion",

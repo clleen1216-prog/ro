@@ -15,6 +15,10 @@ import {
   jobExpNeed,
   sellPrice,
   jobBonus,
+  jobRegen,
+  STAT_MAX,
+  ASPD_MIN,
+  CRIT_MAX,
   skillAvail,
   rollLoot,
 } from "@/game/content";
@@ -52,6 +56,7 @@ export const world = {
   floats: [] as FloatText[],
   crits: [] as CritFx[],
   hitStop: 0,
+  capSeen: { aspd: false, crit: false } as { aspd: boolean; crit: boolean },
   flash: 0,
   particles: [] as Particle[],
   logs: [] as string[],
@@ -227,8 +232,12 @@ export function derive(p: Player) {
     mdef,
     hit: 60 + D * 2 + p.baseLevel + bHit + pa.hit + (wt ? wt.hit : 0),
     flee: 10 + A * 2 + p.baseLevel + bFlee + pa.flee,
-    crit: Math.min(70, L * 0.5 + (wt ? wt.crit : 0) + pa.crit + bCrit),
-    aspd: Math.max(0.22, (1.28 - A * 0.018 - D * 0.006) * (wt ? wt.speed : 1) * (1 - Math.min(60, pa.aspd + bAspd) / 100)),
+    crit: Math.min(CRIT_MAX, L * 0.5 + (wt ? wt.crit : 0) + pa.crit + bCrit),
+    aspdCap: (1.28 - A * 0.018 - D * 0.006) * (wt ? wt.speed : 1) * (1 - Math.min(60, pa.aspd + bAspd) / 100) <= ASPD_MIN,
+    critCap: L * 0.5 + (wt ? wt.crit : 0) + pa.crit + bCrit >= CRIT_MAX,
+    hpRegen: ((48 + p.baseLevel * 12 + V * 8) * jd.hp * (1 + pa.hp / 100) * 0.012 * (1 + V / 60) * jobRegen(p.job)[0]),
+    spRegen: ((20 + p.baseLevel * 4 + I * 5) * jd.sp * (1 + pa.sp / 100) * 0.016 * (1 + I / 60) * jobRegen(p.job)[1]),
+    aspd: Math.max(ASPD_MIN, (1.28 - A * 0.018 - D * 0.006) * (wt ? wt.speed : 1) * (1 - Math.min(60, pa.aspd + bAspd) / 100)),
     speed: 148 + A * 1.7,
     range,
   };
@@ -708,7 +717,7 @@ export function learnSkill(id: SkillId) {
 
 export function addStat(key: "str" | "agi" | "vit" | "int" | "dex" | "luk") {
   const p = world.player;
-  if (!p || p.statPoints <= 0) return;
+  if (!p || p.statPoints <= 0 || p[key] >= STAT_MAX) return;
   p[key] += 1;
   p.statPoints -= 1;
   const d = derive(p);
@@ -952,12 +961,41 @@ export function betaSetJob(job: JobId) {
   const d = derive(p);
   p.hp = d.maxHp;
   p.sp = d.maxSp;
-  autoEquip(true);
+  grantBestGear();
   log(`You are now a ${JOBS[job].name}. Stats and skills are reset: spend them again.`);
   sfxLevel();
   burst(p.x, p.y - 40, "#e4b15a");
   persist();
   bump();
+}
+
+/** Beta: hand out the best gear this job can wear in every slot, then equip it. */
+export function grantBestGear() {
+  const p = world.player;
+  if (!p) return;
+  const jd = JOBS[p.job];
+  const have = (id: string) => p.inv.some((s) => s.itemId === id) || Object.values(p.eq).includes(id);
+  const best = new Map<string, { id: string; s: number }[]>();
+  for (const it of Object.values(ITEMS)) {
+    if (!it || it.slot === "use" || it.slot === "etc" || !canEquip(p.job, it)) continue;
+    if (it.slot === "weapon" && it.weapon && !jd.weapons.includes(it.weapon) && p.job !== "novice") continue;
+    const key = it.slot;
+    const list = best.get(key) ?? [];
+    list.push({ id: it.id, s: gearScore(it, p.job) });
+    best.set(key, list);
+  }
+  let n = 0;
+  for (const [slot, list] of best) {
+    list.sort((a, b) => b.s - a.s);
+    for (const pick of list.slice(0, slot === "acc" ? 2 : 1)) {
+      if (!have(pick.id)) {
+        p.inv.push({ itemId: pick.id, qty: 1 });
+        n++;
+      }
+    }
+  }
+  autoEquip(true);
+  if (n) log(`Beta gift: ${n} best-in-slot item${n > 1 ? "s" : ""} for your job, equipped.`);
 }
 
 /** Beta: jump to a base level (stats and skills reset). */

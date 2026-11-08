@@ -13,6 +13,7 @@ import {
   SLOT_LABEL,
   SMITH_STOCK,
   STYLES,
+  STAT_MAX,
   JOB_ORDER,
   skillAvail,
   SUPPLY_STOCK,
@@ -58,6 +59,7 @@ import {
   autoEquip,
   betaSetJob,
   betaSetLevel,
+  grantBestGear,
   resetSkills,
   resetStats,
   junkIndexes,
@@ -487,6 +489,7 @@ export function GameApp() {
 
           <TargetCard />
           <AutoChip />
+          <CapChips />
 
           <div className="pointer-events-none absolute top-40 right-3 left-3 flex flex-col gap-1 sm:top-auto sm:bottom-28 sm:left-3 sm:max-w-xs">
             <Meter label="HP" value={player.hp} max={derive(player).maxHp} bar="bg-hp" track="bg-hp-deep" />
@@ -542,21 +545,6 @@ export function GameApp() {
             </div>
           </div>
 
-          <button
-            type="button"
-            className="touch-only pointer-events-auto absolute right-3 bottom-28 h-16 w-16 place-items-center rounded-full bg-gold text-sm font-medium text-ink"
-            onPointerDown={() => {
-              world.touch.attack = true;
-            }}
-            onPointerUp={() => {
-              world.touch.attack = false;
-            }}
-            onPointerLeave={() => {
-              world.touch.attack = false;
-            }}
-          >
-            Hit
-          </button>
 
           <div className="pointer-events-none absolute inset-x-2 top-24 bottom-24 flex flex-wrap content-start justify-center gap-2 overflow-auto">
             {world.panels.status && player && <StatusWindow />}
@@ -685,6 +673,9 @@ function BetaWindow() {
         </button>
         <button type="button" className="rounded-md bg-gold px-2 py-1 text-xs text-ink" onClick={() => resetSkills()}>
           Reset skill points
+        </button>
+        <button type="button" className="rounded-md bg-gold px-2 py-1 text-xs text-ink" onClick={() => grantBestGear()}>
+          Give &amp; equip best gear
         </button>
       </div>
       <p className="mt-3 text-xs text-muted">Set base level (resets points)</p>
@@ -892,6 +883,32 @@ function Window({ title, onClose, children }: { title: string; onClose: () => vo
   );
 }
 
+function LimitStat({ label, value, capped, cap }: { label: string; value: string; capped: boolean; cap: string }) {
+  return (
+    <span
+      className={`border px-2 py-1 ${capped ? "border-gold bg-surface-2 font-bold text-gold" : "border-line text-muted"}`}
+      style={capped ? { boxShadow: "0 0 8px #ffcf3a", textShadow: "0 0 6px #ffcf3a" } : undefined}
+    >
+      {label} {value}
+      {capped ? ` · ${cap}` : ""}
+    </span>
+  );
+}
+
+/** Always-visible badges when a stat is at its hard limit. */
+function CapChips() {
+  const p = world.player;
+  if (!p) return null;
+  const d = derive(p);
+  if (!d.aspdCap && !d.critCap) return null;
+  return (
+    <div className="pointer-events-none absolute top-28 left-3 flex flex-col gap-1">
+      {d.aspdCap && <LimitStat label="ASPD" value={`${d.aspd.toFixed(2)}s`} capped cap="SPEED LIMIT" />}
+      {d.critCap && <LimitStat label="CRIT" value={`${d.crit.toFixed(0)}%`} capped cap="MAX" />}
+    </div>
+  );
+}
+
 function StatusWindow() {
   const p = world.player;
   if (!p) return null;
@@ -912,18 +929,26 @@ function StatusWindow() {
       <div className="mt-2 grid grid-cols-2 gap-2">
         {rows.map((row) => (
           <div key={row.key} className="flex items-center justify-between rounded-md bg-surface-2 px-2 py-1">
-            <span className="text-sm">
+            <span className={`text-sm ${p[row.key] >= STAT_MAX ? "font-bold text-gold" : ""}`} style={p[row.key] >= STAT_MAX ? { textShadow: "0 0 6px #ffcf3a" } : undefined}>
               {row.label} {row.val}
+              {p[row.key] >= STAT_MAX && <span className="ml-1 text-[9px]">MAX</span>}
             </span>
-            <button type="button" className="h-11 w-11 rounded-md bg-gold text-lg text-ink" disabled={p.statPoints <= 0} onClick={() => addStat(row.key)}>
+            <button type="button" className="h-11 w-11 rounded-md bg-gold text-lg text-ink" disabled={p.statPoints <= 0 || p[row.key] >= STAT_MAX} onClick={() => addStat(row.key)}>
               +
             </button>
           </div>
         ))}
       </div>
       <p className="mt-3 text-xs leading-relaxed text-muted">
-        ATK {d.atk} · MATK {d.matk} · DEF {d.def} · HIT {d.hit} · FLEE {d.flee} · CRIT {d.crit.toFixed(0)}% · delay {d.aspd.toFixed(2)}s
+        ATK {d.atk} · MATK {d.matk} · DEF {d.def} · HIT {d.hit} · FLEE {d.flee}
       </p>
+      <div className="mt-1 flex flex-wrap gap-2 text-xs">
+        <LimitStat label="CRIT" value={`${d.crit.toFixed(0)}%`} capped={d.critCap} cap="MAX" />
+        <LimitStat label="Attack delay" value={`${d.aspd.toFixed(2)}s`} capped={d.aspdCap} cap="SPEED LIMIT" />
+        <span className="text-muted">
+          HP regen {d.hpRegen.toFixed(1)}/s · SP regen {d.spRegen.toFixed(1)}/s (x5 sitting)
+        </span>
+      </div>
     </Window>
   );
 }

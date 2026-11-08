@@ -820,6 +820,36 @@ export function jobFamily(job: JobId): JobId[] {
   return par ? [job, par] : [job];
 }
 
+export const STAT_MAX = 99;
+export const ASPD_MIN = 0.22;
+export const CRIT_MAX = 70;
+
+/** [HP, SP] regeneration multipliers: healers and casters recover SP fast, bruisers recover HP fast. */
+const REGEN: Partial<Record<JobId, [number, number]>> = {
+  swordman: [1.3, 0.8],
+  mage: [0.8, 1.5],
+  archer: [1, 1],
+  acolyte: [1.1, 1.5],
+  thief: [1.1, 1],
+  merchant: [1.2, 0.9],
+  knight: [1.8, 0.8],
+  crusader: [1.7, 1.1],
+  wizard: [0.8, 2],
+  sage: [0.9, 1.9],
+  hunter: [1.1, 1.1],
+  bard: [1, 1.5],
+  priest: [1.2, 2.2],
+  monk: [1.7, 1.3],
+  assassin: [1.2, 1],
+  rogue: [1.2, 1.1],
+  blacksmith: [1.6, 0.9],
+  alchemist: [1.2, 1.2],
+};
+
+export function jobRegen(job: JobId): [number, number] {
+  return REGEN[job] ?? [1, 1];
+}
+
 export const MAX_BASE = 60;
 export const MAX_JOB = 50;
 

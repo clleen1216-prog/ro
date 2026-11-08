@@ -66,7 +66,7 @@ export function gearScore(it: ItemDef, job: JobId): number {
   if (it.weapon) {
     const t = WEAPON_TYPES[it.weapon];
     const rank = jd.weapons.indexOf(it.weapon);
-    s = s * (t.atk > 0.6 ? t.atk / t.speed : 1 / t.speed) + (rank === 0 ? 40 : rank > 0 ? 25 : -30);
+    s = s * (t.atk > 0.6 ? t.atk / t.speed : 1 / t.speed) + (rank === 0 ? 90 : rank > 0 ? 25 : -30);
     s += (it.range ?? 0) * 0.02;
   }
   return s + RARITY[rarityOf(it)].rank * 0.5;
