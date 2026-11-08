@@ -2,6 +2,7 @@ import type {
   Behavior,
   GearSlot,
   HairStyle,
+  SkillDef,
   HatKind,
   IconKind,
   ItemSlot,
@@ -11,6 +12,7 @@ import type {
   SkillId,
   WeaponKind,
 } from "@/game/types";
+import { NEW_SKILLS } from "@/game/skills2";
 import { MONSTER_DEFS, RO_ITEMS, SHOP_ARMOR, SHOP_TOOLS, SHOP_WEAPONS, type MonsterDef } from "@/game/rodata";
 
 export type { MonsterDef };
@@ -643,15 +645,7 @@ export const SMITH_STOCK = [...BASE_SMITH, ...SHOP_WEAPONS];
 export const OUTFIT_STOCK = [...BASE_OUTFIT, ...SHOP_ARMOR];
 export const SUPPLY_STOCK = ["salve", "ether", ...SHOP_TOOLS];
 
-export type SkillDef = {
-  id: SkillId;
-  name: string;
-  job: JobId;
-  sp: number;
-  max: number;
-  blurb: string;
-  target: "self" | "enemy" | "area" | "passive";
-};
+export type { SkillDef };
 
 export const SKILLS: Record<SkillId, SkillDef> = {
   firstAid: {
@@ -771,30 +765,60 @@ export const SKILLS: Record<SkillId, SkillDef> = {
     blurb: "AGI and DEX surge. HIT and FLEE both rise while it holds.",
     target: "self",
   },
+  ...NEW_SKILLS,
 };
 
-export const JOBS: Record<JobId, { name: string; blurb: string; skills: SkillId[] }> = {
-  novice: {
-    name: "Novice",
-    blurb: "Everyone starts here. A knife, First Aid, and the south road.",
-    skills: ["firstAid", "playDead"],
-  },
-  swordman: {
-    name: "Swordman",
-    blurb: "Swords and shields. Bash, Magnum Break, Bowling Bash, and Endure.",
-    skills: ["arcCut", "ringCut", "crush", "guard"],
-  },
-  mage: {
-    name: "Mage",
-    blurb: "Rods and staves. Fire Bolt, Cold Bolt, Fire Ball, and Thunderstorm.",
-    skills: ["spark", "frost", "ember", "storm"],
-  },
-  archer: {
-    name: "Archer",
-    blurb: "Bows. Double Strafe, Arrow Shower, and Improve Concentration.",
-    skills: ["twin", "shower", "focus"],
-  },
+export type JobDef = {
+  name: string;
+  blurb: string;
+  tier: 0 | 1 | 2;
+  parent?: JobId;
+  skills: SkillId[];
+  /** max HP / SP multipliers */
+  hp: number;
+  sp: number;
+  /** what auto-equip should favour */
+  focus: "str" | "agi" | "int" | "dex" | "vit";
+  magic: boolean;
+  weapons: WeaponKind[];
+  /** passive range bonus */
+  range?: number;
 };
+
+export const JOBS: Record<JobId, JobDef> = {
+  novice: { name: "Novice", tier: 0, blurb: "Everyone starts here. A knife, First Aid, and the south road.", skills: ["firstAid", "playDead"], hp: 1, sp: 1, focus: "str", magic: false, weapons: ["dagger"] },
+  swordman: { name: "Swordman", tier: 1, blurb: "Swords and shields. Bash, Magnum Break, Bowling Bash, and Endure.", skills: ["arcCut", "ringCut", "crush", "guard"], hp: 1.15, sp: 0.9, focus: "str", magic: false, weapons: ["sword", "axe"] },
+  mage: { name: "Mage", tier: 1, blurb: "Rods and staves. Fire Bolt, Cold Bolt, Fire Ball, and Thunderstorm.", skills: ["spark", "frost", "ember", "storm"], hp: 0.85, sp: 1.4, focus: "int", magic: true, weapons: ["staff"], range: 156 },
+  archer: { name: "Archer", tier: 1, blurb: "Bows. Double Strafe, Arrow Shower, and Improve Concentration.", skills: ["twin", "shower", "focus"], hp: 0.95, sp: 1, focus: "dex", magic: false, weapons: ["bow"] },
+  acolyte: { name: "Acolyte", tier: 1, blurb: "Maces and prayer. Heal, Blessing, Increase AGI, Holy Light.", skills: ["heal", "blessing", "incAgi", "holyLight", "divineProt"], hp: 1, sp: 1.25, focus: "int", magic: true, weapons: ["mace", "staff"] },
+  thief: { name: "Thief", tier: 1, blurb: "Daggers and speed. Envenom, Hiding, Double Attack, Improve Dodge.", skills: ["envenom", "hiding", "throwStone", "improveDodge", "doubleAttack"], hp: 1, sp: 0.9, focus: "agi", magic: false, weapons: ["dagger"] },
+  merchant: { name: "Merchant", tier: 1, blurb: "Axes and coin. Mammonite, Cart Revolution, Loud Exclamation, Discount.", skills: ["mammonite", "cartRev", "loudExc", "discount"], hp: 1.1, sp: 0.9, focus: "str", magic: false, weapons: ["axe", "mace"] },
+  knight: { name: "Knight", tier: 2, parent: "swordman", blurb: "Spear and charge. Pierce, Brandish Spear, Two-Hand Quicken.", skills: ["pierce", "brandish", "twoHandQuick", "spearMastery", "peco"], hp: 1.35, sp: 0.9, focus: "str", magic: false, weapons: ["spear", "sword"] },
+  crusader: { name: "Crusader", tier: 2, parent: "swordman", blurb: "Holy shield-bearer. Holy Cross, Shield Charge, Grand Cross, Auto Guard.", skills: ["holyCross", "shieldCharge", "grandCross", "autoGuard", "faith"], hp: 1.4, sp: 1.1, focus: "vit", magic: false, weapons: ["spear", "sword"] },
+  wizard: { name: "Wizard", tier: 2, parent: "mage", blurb: "Master of storms. Jupitel Thunder, Lord of Vermilion, Meteor Storm.", skills: ["jupitel", "lov", "meteor", "energyCoat", "soulDrain"], hp: 0.85, sp: 1.7, focus: "int", magic: true, weapons: ["staff"], range: 170 },
+  sage: { name: "Sage", tier: 2, parent: "mage", blurb: "Scholar of the elements. Earth Spike, Heaven's Drive, Endow Blaze.", skills: ["earthSpike", "heavensDrive", "endowBlaze", "study"], hp: 0.95, sp: 1.55, focus: "int", magic: true, weapons: ["staff"], range: 165 },
+  hunter: { name: "Hunter", tier: 2, parent: "archer", blurb: "Falcon and traps. Blitz Beat, Ankle Snare, Sharp Shooting.", skills: ["blitz", "ankleSnare", "sharpShoot", "steelCrow"], hp: 1, sp: 1.05, focus: "dex", magic: false, weapons: ["bow"], range: 20 },
+  bard: { name: "Bard", tier: 2, parent: "archer", blurb: "Songs of war. Melody Strike, A Whistle, Assassin Cross, Apple of Idun.", skills: ["melody", "whistle", "assassinCross", "appleIdun"], hp: 0.95, sp: 1.3, focus: "dex", magic: true, weapons: ["harp"] },
+  priest: { name: "Priest", tier: 2, parent: "acolyte", blurb: "Holy healer. Sanctuary, Kyrie Eleison, Magnus Exorcismus.", skills: ["sanctuary", "kyrie", "magnus", "impositio"], hp: 1.05, sp: 1.6, focus: "int", magic: true, weapons: ["mace", "staff"], range: 120 },
+  monk: { name: "Monk", tier: 2, parent: "acolyte", blurb: "Fists of spirit. Investigate, Finger Offensive, Asura Strike.", skills: ["investigate", "fingerOff", "asura", "explSpirits", "tripleAttack"], hp: 1.25, sp: 1.2, focus: "str", magic: false, weapons: ["knuckle"] },
+  assassin: { name: "Assassin", tier: 2, parent: "thief", blurb: "Katars and poison. Sonic Blow, Grimtooth, Cloaking.", skills: ["sonic", "grimtooth", "enchantPoison", "cloaking", "katarMastery"], hp: 1.05, sp: 1, focus: "agi", magic: false, weapons: ["katar", "dagger"] },
+  rogue: { name: "Rogue", tier: 2, parent: "thief", blurb: "Cunning and coin. Back Stab, Raid, Steal Coin, Intimidate.", skills: ["backstab", "raid", "stealCoin", "intimidate", "dodgeMastery"], hp: 1, sp: 1, focus: "agi", magic: false, weapons: ["dagger", "bow"] },
+  blacksmith: { name: "Blacksmith", tier: 2, parent: "merchant", blurb: "Forge and hammer. Hammer Fall, Adrenaline Rush, Over Thrust.", skills: ["hammerFall", "adrenaline", "overThrust", "ironHand"], hp: 1.25, sp: 0.95, focus: "str", magic: false, weapons: ["axe", "mace"] },
+  alchemist: { name: "Alchemist", tier: 2, parent: "merchant", blurb: "Acid and fire. Acid Terror, Demonstration, Potion Pitcher.", skills: ["acidTerror", "demonstration", "potionPitcher", "alchemyStudy"], hp: 1.05, sp: 1.1, focus: "dex", magic: false, weapons: ["axe", "mace"], range: 60 },
+};
+
+export const JOB_ORDER = Object.keys(JOBS) as JobId[];
+
+/** Skills this job may learn: Novice, its parent job, and itself. */
+export function skillAvail(job: JobId, sk: SkillDef) {
+  return sk.job === "novice" || sk.job === job || sk.job === JOBS[job].parent;
+}
+
+/** A job inherits equipment rights from its parent. */
+export function jobFamily(job: JobId): JobId[] {
+  const par = JOBS[job].parent;
+  return par ? [job, par] : [job];
+}
 
 export const MAX_BASE = 60;
 export const MAX_JOB = 50;
@@ -809,23 +833,35 @@ export function jobExpNeed(level: number) {
   return Math.round(6 * Math.pow(level, 1.7) + 4);
 }
 
+const BONUS: Partial<Record<JobId, Partial<Record<"str" | "agi" | "vit" | "int" | "dex" | "luk", number>>>> = {
+  swordman: { str: 2, vit: 1, dex: 1 },
+  mage: { int: 2, dex: 1 },
+  archer: { dex: 2, agi: 1 },
+  acolyte: { int: 1, vit: 1, dex: 1 },
+  thief: { agi: 2, dex: 1, luk: 1 },
+  merchant: { str: 1, vit: 1, luk: 1, dex: 1 },
+  knight: { str: 3, vit: 2, dex: 1, agi: 1 },
+  crusader: { str: 2, vit: 3, int: 1, dex: 1 },
+  wizard: { int: 4, dex: 2 },
+  sage: { int: 3, dex: 2, vit: 1 },
+  hunter: { dex: 4, agi: 2, luk: 1 },
+  bard: { dex: 3, agi: 2, int: 1, luk: 1 },
+  priest: { int: 3, vit: 2, dex: 2 },
+  monk: { str: 3, agi: 2, vit: 2, dex: 1 },
+  assassin: { agi: 4, str: 2, dex: 2, luk: 1 },
+  rogue: { agi: 3, dex: 2, str: 1, luk: 2 },
+  blacksmith: { str: 3, vit: 2, dex: 2, luk: 1 },
+  alchemist: { int: 2, dex: 3, vit: 2, luk: 1 },
+};
+
 export function jobBonus(job: JobId): Partial<Record<"str" | "agi" | "vit" | "int" | "dex" | "luk", number>> {
-  switch (job) {
-    case "swordman":
-      return { str: 2, vit: 1, dex: 1 };
-    case "mage":
-      return { int: 2, dex: 1 };
-    case "archer":
-      return { dex: 2, agi: 1 };
-    default:
-      return {};
-  }
+  return BONUS[job] ?? {};
 }
 
 export function canEquip(job: JobId, it: ItemDef) {
   if (it.slot === "use" || it.slot === "etc") return false;
   if (!it.jobs) return true;
-  return it.jobs.includes(job);
+  return jobFamily(job).some((j) => it.jobs!.includes(j));
 }
 
 export function itemStats(it: ItemDef) {

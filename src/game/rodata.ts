@@ -114,12 +114,32 @@ const ITEM_LIST: ItemDef[] = [
   gear("sword", "Sword", "weapon", "sword", "#d5d8df", 500, "A plain one-handed sword.", { atk: 19, weapon: "sword", range: 54, jobs: ["novice", "swordman"] }),
   gear("blade", "Blade", "weapon", "sword", "#e1e5ec", 2500, "A balanced steel blade.", { atk: 27, weapon: "sword", range: 55, jobs: ["novice", "swordman"] }),
   gear("slayer", "Slayer", "weapon", "sword", "#c7d3e6", 4800, "A heavy two-edged sword. Hits hard.", { atk: 38, str: 1, weapon: "sword", range: 57, jobs: ["swordman"] }),
-  gear("rod", "Rod", "weapon", "staff", "#8a6a3a", 50, "A plain casting rod.", { atk: 2, matk: 12, weapon: "staff", range: 156, jobs: ["novice", "mage"] }),
+  gear("rod", "Rod", "weapon", "staff", "#8a6a3a", 50, "A plain casting rod.", { atk: 2, matk: 12, weapon: "staff", range: 156, jobs: ["novice", "mage", "acolyte"] }),
   gear("wand", "Wand", "weapon", "staff", "#7a8fd0", 800, "A short wand with a blue gem.", { atk: 2, matk: 20, int: 1, weapon: "staff", range: 160, jobs: ["mage"] }),
   gear("arc-wand", "Arc Wand", "weapon", "staff", "#b06ad0", 3400, "Crackles with stored mana.", { atk: 3, matk: 32, int: 2, weapon: "staff", range: 168, jobs: ["mage"] }),
   gear("bow", "Bow", "weapon", "bow", "#b8935a", 200, "A simple short bow.", { atk: 14, weapon: "bow", range: 176, jobs: ["novice", "archer"] }),
   gear("composite-bow", "Composite Bow", "weapon", "bow", "#a37a3a", 1800, "Layered horn and wood. A real pull.", { atk: 24, dex: 1, weapon: "bow", range: 190, jobs: ["archer"] }),
   gear("great-bow", "Great Bow", "weapon", "bow", "#7a5a2a", 4500, "Taller than the archer who draws it.", { atk: 34, dex: 2, weapon: "bow", range: 204, jobs: ["archer"] }),
+  // ── Second-wave weapons (maces, spears, axes, katars, knuckles, instruments) ──
+  gear("club", "Club", "weapon", "mace", "#9a7a4a", 120, "A stout wooden club.", { atk: 13, weapon: "mace", range: 48, jobs: ["acolyte", "merchant"] }),
+  gear("mace", "Mace", "weapon", "mace", "#aeb4bd", 900, "A flanged iron mace. Reliable.", { atk: 21, weapon: "mace", range: 50, jobs: ["acolyte", "merchant"] }),
+  gear("chain", "Chain", "weapon", "mace", "#8a8f98", 2800, "A spiked chain on a short haft.", { atk: 30, int: 1, weapon: "mace", range: 52, jobs: ["acolyte", "merchant"] }),
+  gear("morning-star", "Morning Star", "weapon", "mace", "#c7ccd4", 5200, "A heavy spiked ball on a long grip.", { atk: 40, int: 1, vit: 1, weapon: "mace", range: 54, jobs: ["acolyte"] }),
+  gear("javelin", "Javelin", "weapon", "spear", "#cfd3da", 650, "A light throwing spear used in melee.", { atk: 20, weapon: "spear", range: 68, jobs: ["knight", "crusader"] }),
+  gear("spear", "Spear", "weapon", "spear", "#d5d8df", 2200, "A well-balanced war spear.", { atk: 30, weapon: "spear", range: 72, jobs: ["knight", "crusader"] }),
+  gear("lance", "Lance", "weapon", "spear", "#e1e5ec", 5600, "A knight's long lance.", { atk: 43, str: 1, weapon: "spear", range: 76, jobs: ["knight", "crusader"] }),
+  gear("axe", "Axe", "weapon", "axe", "#b5b9c1", 450, "A woodsman's axe.", { atk: 22, weapon: "axe", range: 50, jobs: ["merchant", "swordman"] }),
+  gear("battle-axe", "Battle Axe", "weapon", "axe", "#c4c8d0", 2600, "A broad two-handed axe.", { atk: 36, str: 1, weapon: "axe", range: 52, jobs: ["merchant", "swordman"] }),
+  gear("hammer", "Hammer", "weapon", "axe", "#9aa0aa", 5400, "A smith's war hammer. Hits very hard.", { atk: 47, str: 2, weapon: "axe", range: 54, jobs: ["merchant"] }),
+  gear("katar", "Katar", "weapon", "katar", "#cfd3da", 800, "A punch dagger with an H-grip.", { atk: 17, weapon: "katar", range: 44, jobs: ["assassin"] }),
+  gear("jur", "Jur", "weapon", "katar", "#d9dde4", 2900, "A twin-bladed katar.", { atk: 26, agi: 1, weapon: "katar", range: 44, jobs: ["assassin"] }),
+  gear("scarlet-katar", "Scarlet Katar", "weapon", "katar", "#e07a7a", 5600, "Stained red from a hundred shadows.", { atk: 36, agi: 2, weapon: "katar", range: 46, jobs: ["assassin"] }),
+  gear("knuckle-duster", "Knuckle Duster", "weapon", "knuckle", "#a8adb6", 600, "Brass knuckles.", { atk: 14, weapon: "knuckle", range: 40, jobs: ["monk"] }),
+  gear("hora", "Hora", "weapon", "knuckle", "#c9a43a", 2500, "A spiked fist guard.", { atk: 22, str: 1, weapon: "knuckle", range: 42, jobs: ["monk"] }),
+  gear("fist", "Fist of the Mountain", "weapon", "knuckle", "#e4b15a", 5200, "Gauntlets worn smooth by training.", { atk: 31, str: 1, agi: 1, weapon: "knuckle", range: 44, jobs: ["monk"] }),
+  gear("violin", "Violin", "weapon", "harp", "#a8643a", 700, "A fiddle for marching songs.", { atk: 6, matk: 9, weapon: "harp", range: 150, jobs: ["bard"] }),
+  gear("lute", "Lute", "weapon", "harp", "#b87a3a", 2700, "A warm, ringing lute.", { atk: 8, matk: 17, dex: 1, weapon: "harp", range: 156, jobs: ["bard"] }),
+  gear("guitar", "Guitar", "weapon", "harp", "#d4a05a", 5000, "Electric with applause.", { atk: 10, matk: 27, dex: 1, int: 1, weapon: "harp", range: 162, jobs: ["bard"] }),
 
   // ── Armor ──────────────────────────────────────────────────────
   gear("jacket", "Jacket", "armor", "armor", "#9a8a6a", 120, "A light cloth jacket.", { def: 5 }),
@@ -382,6 +402,8 @@ for (const [id, def] of Object.entries(MONSTER_DEFS)) {
 export const SHOP_WEAPONS = [
   "knife", "cutter", "main-gauche", "sword", "blade", "slayer",
   "rod", "wand", "arc-wand", "bow", "composite-bow", "great-bow", "claymore", "staff-of-soul", "crossbow",
+  "club", "mace", "chain", "morning-star", "javelin", "spear", "lance", "axe", "battle-axe", "hammer",
+  "katar", "jur", "scarlet-katar", "knuckle-duster", "hora", "fist", "violin", "lute", "guitar",
 ];
 export const SHOP_ARMOR = [
   "jacket", "padded-armor", "chain-mail", "silk-robe", "hood", "muffler", "manteau",

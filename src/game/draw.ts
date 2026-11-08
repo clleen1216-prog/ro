@@ -290,6 +290,50 @@ function paintIcon(ctx: CanvasRenderingContext2D, kind: IconKind) {
     ctx.fillRect(-5, 4, 10, 2);
     ctx.fillStyle = "#6b442c";
     ctx.fillRect(-1.4, 6, 2.8, 5);
+  } else if (kind === "spear") {
+    ctx.fillStyle = "#6b442c";
+    ctx.fillRect(-1, -6, 2, 18);
+    ctx.fillStyle = fill;
+    ctx.beginPath();
+    ctx.moveTo(0, -14);
+    ctx.lineTo(4, -5);
+    ctx.lineTo(-4, -5);
+    ctx.fill();
+  } else if (kind === "mace") {
+    ctx.fillStyle = "#6b442c";
+    ctx.fillRect(-1.2, -4, 2.4, 16);
+    ctx.fillStyle = fill;
+    ctx.fillRect(-5, -12, 10, 9);
+    ctx.fillStyle = "#4a4f58";
+    ctx.fillRect(-7, -9, 2, 3);
+    ctx.fillRect(5, -9, 2, 3);
+  } else if (kind === "axe") {
+    ctx.fillStyle = "#6b442c";
+    ctx.fillRect(-1.2, -10, 2.4, 22);
+    ctx.fillStyle = fill;
+    ctx.beginPath();
+    ctx.moveTo(1, -12);
+    ctx.lineTo(9, -8);
+    ctx.lineTo(9, 0);
+    ctx.lineTo(1, -2);
+    ctx.fill();
+  } else if (kind === "katar") {
+    ctx.fillRect(-1.5, -12, 3, 15);
+    ctx.fillStyle = "#6b442c";
+    ctx.fillRect(-5, 3, 10, 2);
+    ctx.fillRect(-1, 5, 2, 6);
+  } else if (kind === "knuckle") {
+    ctx.fillRect(-7, -4, 14, 8);
+    ctx.fillStyle = "#4a4f58";
+    ctx.fillRect(-7, -6, 3, 3);
+    ctx.fillRect(-2, -6, 3, 3);
+    ctx.fillRect(3, -6, 3, 3);
+  } else if (kind === "harp") {
+    ctx.fillRect(-6, -2, 12, 12);
+    ctx.fillStyle = "#6b442c";
+    ctx.fillRect(-1.2, -14, 2.4, 14);
+    ctx.fillStyle = "#f4efe0";
+    ctx.fillRect(-0.6, 1, 1.2, 8);
   } else if (kind === "staff") {
     ctx.fillStyle = "#6b442c";
     ctx.fillRect(-1.2, -12, 2.4, 24);

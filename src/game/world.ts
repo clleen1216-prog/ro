@@ -15,6 +15,7 @@ import {
   jobExpNeed,
   sellPrice,
   jobBonus,
+  skillAvail,
   rollLoot,
 } from "@/game/content";
 import type {
@@ -53,7 +54,7 @@ export const world = {
   dialog: null as Dialog | null,
   shop: null as null | "smith" | "outfit" | "supply",
   storageOpen: false,
-  panels: { status: false, equip: false, inv: false, skills: false, help: false, nav: false, auto: false },
+  panels: { status: false, equip: false, inv: false, skills: false, help: false, nav: false, auto: false, beta: false },
   keys: new Set<string>(),
   qaKeys: null as Set<string> | null,
   touch: { x: 0, y: 0, attack: false },
@@ -170,19 +171,34 @@ export function derive(p: Player) {
     }
   }
   const wt = wKind ? WEAPON_TYPES[wKind] : null;
-  if (p.job === "mage") range = Math.max(range, 156);
-  if (p.job === "archer") range += 28;
+  const jd = JOBS[p.job];
+  if (jd.magic && jd.range && jd.range >= 120) range = Math.max(range, jd.range);
+  else if (jd.range && !jd.magic) range += jd.range;
+  else if (p.job === "archer") range += 28;
+  const pa = { atk: 0, matk: 0, def: 0, hit: 0, flee: 0, crit: 0, hp: 0, sp: 0, aspd: 0, disc: 0 };
+  for (const id of Object.keys(p.skills) as SkillId[]) {
+    const lv = p.skills[id] ?? 0;
+    const ps = SKILLS[id]?.fx?.pass;
+    if (!ps || lv <= 0) continue;
+    for (const k of Object.keys(ps) as (keyof typeof pa)[]) pa[k] += (ps[k] ?? 0) * lv;
+  }
   const now = world.time;
   let bAtk = 0;
   let bDef = 0;
   let bFlee = 0;
   let bHit = 0;
+  let bAspd = 0;
+  let bCrit = 0;
+  let bMatk = 0;
   for (const b of p.buffs) {
     if (b.until <= now) continue;
     if (b.stat === "atk") bAtk += b.amount;
     if (b.stat === "def") bDef += b.amount;
     if (b.stat === "flee") bFlee += b.amount;
     if (b.stat === "hit") bHit += b.amount;
+    if (b.stat === "aspd") bAspd += b.amount;
+    if (b.stat === "crit") bCrit += b.amount;
+    if (b.stat === "matk") bMatk += b.amount;
   }
   const S = p.str + str;
   const A = p.agi + agi;
@@ -197,17 +213,18 @@ export function derive(p: Player) {
     int: I,
     dex: D,
     luk: L,
-    maxHp: 48 + p.baseLevel * 12 + V * 8,
-    maxSp: 20 + p.baseLevel * 4 + I * 5,
-    atk: Math.round((5 + S * 2 + p.baseLevel + atk + bAtk + (wKind === "bow" ? Math.floor(D * 0.8) : 0)) * (wt ? wt.atk : 1) * (wKind === "staff" ? 1 : 1)),
-    matk: Math.round((3 + I * 2 + matk) * (wKind === "staff" ? 1.12 : 1)),
+    maxHp: Math.round((48 + p.baseLevel * 12 + V * 8) * jd.hp * (1 + pa.hp / 100)),
+    maxSp: Math.round((20 + p.baseLevel * 4 + I * 5) * jd.sp * (1 + pa.sp / 100)),
+    disc: pa.disc,
+    atk: Math.round((5 + S * 2 + p.baseLevel + atk + bAtk + pa.atk + (wKind === "bow" ? Math.floor(D * 0.8) : 0)) * (wt ? wt.atk : 1) * (wKind === "staff" ? 1 : 1)),
+    matk: Math.round((3 + I * 2 + matk + bMatk + pa.matk) * (wKind === "staff" ? 1.12 : wKind === "harp" ? 1.08 : 1)),
     wKind,
-    def: Math.floor(V / 2) + def + bDef,
+    def: Math.floor(V / 2) + def + bDef + pa.def,
     mdef,
-    hit: 60 + D * 2 + p.baseLevel + bHit + (wt ? wt.hit : 0),
-    flee: 10 + A * 2 + p.baseLevel + bFlee,
-    crit: Math.min(55, L * 0.5 + (wt ? wt.crit : 0)),
-    aspd: Math.max(0.3, (1.28 - A * 0.018 - D * 0.006) * (wt ? wt.speed : 1)),
+    hit: 60 + D * 2 + p.baseLevel + bHit + pa.hit + (wt ? wt.hit : 0),
+    flee: 10 + A * 2 + p.baseLevel + bFlee + pa.flee,
+    crit: Math.min(70, L * 0.5 + (wt ? wt.crit : 0) + pa.crit + bCrit),
+    aspd: Math.max(0.22, (1.28 - A * 0.018 - D * 0.006) * (wt ? wt.speed : 1) * (1 - Math.min(60, pa.aspd + bAspd) / 100)),
     speed: 148 + A * 1.7,
     range,
   };
@@ -378,7 +395,7 @@ export function continueGame() {
       shade: "novice",
     };
     const savedJob = data.player.job as string;
-    data.player.job = legacy[savedJob] ?? (savedJob === "novice" || savedJob === "swordman" || savedJob === "mage" || savedJob === "archer" ? savedJob : "novice");
+    data.player.job = legacy[savedJob] ?? (savedJob in JOBS ? (savedJob as JobId) : "novice");
     data.player.hotbar = data.player.hotbar.map((slot) => (slot && slot.kind === "skill" && !(slot.id in SKILLS) ? null : slot));
     world.player = data.player;
     world.mapId = (["ambercross", "southmead", "poring", "woods", "dunes", "crypt", "orc"] as MapId[]).includes(data.mapId) ? data.mapId : "ambercross";
@@ -662,7 +679,7 @@ export function learnSkill(id: SkillId) {
   if (!p) return;
   const sk = SKILLS[id];
   const lv = p.skills[id] ?? 0;
-  if (sk.job !== "novice" && sk.job !== p.job) {
+  if (!skillAvail(p.job, sk)) {
     log("That skill belongs to another job.");
     bump();
     return;
@@ -697,7 +714,9 @@ export function addStat(key: "str" | "agi" | "vit" | "int" | "dex" | "luk") {
 }
 
 export function buyPrice(base: number) {
-  return Math.max(1, Math.round(base));
+  const p = world.player;
+  const disc = p ? Math.min(40, Object.entries(p.skills).reduce((a, [id, lv]) => a + (SKILLS[id as SkillId]?.fx?.pass?.disc ?? 0) * (lv ?? 0), 0)) : 0;
+  return Math.max(1, Math.round(base * (1 - disc / 100)));
 }
 
 export function tryBuy(itemId: string) {
@@ -853,15 +872,7 @@ function fullHeal() {
   log("You feel the road settle back into your bones.");
 }
 
-export function resetStats() {
-  const p = world.player;
-  if (!p) return;
-  if (p.marks < 200) {
-    log("Oren asks 200 zeny to unwind your training.");
-    bump();
-    return;
-  }
-  p.marks -= 200;
+function applyStatReset(p: NonNullable<typeof world.player>) {
   const b = jobBonus(p.job);
   p.str = BASE_STAT + (b.str ?? 0);
   p.agi = BASE_STAT + (b.agi ?? 0);
@@ -870,22 +881,57 @@ export function resetStats() {
   p.dex = BASE_STAT + (b.dex ?? 0);
   p.luk = BASE_STAT + (b.luk ?? 0);
   p.statPoints = 5 + (p.baseLevel - 1) * 3;
+}
+
+/** Beta: stat points are always free to reset. */
+export function resetStats() {
+  const p = world.player;
+  if (!p) return;
+  applyStatReset(p);
+  const d = derive(p);
+  p.hp = Math.min(d.maxHp, p.hp);
+  p.sp = Math.min(d.maxSp, p.sp);
   log("Your stat points are back in your hands.");
   persist();
   bump();
 }
 
-export function changeJob(job: JobId) {
+function skillPool(p: NonNullable<typeof world.player>) {
+  const spent = Object.values(p.skills).reduce<number>((a, v) => a + (v ?? 0), 0);
+  return spent + p.skillPoints;
+}
+
+function dropDeadHotbar(p: NonNullable<typeof world.player>) {
+  p.hotbar = p.hotbar.map((h) => (h && h.kind === "skill" && (p.skills[h.id] ?? 0) <= 0 ? null : h));
+}
+
+/** Beta: refund every learned skill. */
+export function resetSkills() {
   const p = world.player;
-  if (!p || p.job !== "novice" || p.baseLevel < 4 || p.jobLevel < 4) return;
-  const b = jobBonus(job);
-  p.str += b.str ?? 0;
-  p.agi += b.agi ?? 0;
-  p.vit += b.vit ?? 0;
-  p.int += b.int ?? 0;
-  p.dex += b.dex ?? 0;
-  p.luk += b.luk ?? 0;
+  if (!p) return;
+  p.skillPoints = skillPool(p);
+  p.skills = {};
+  p.buffs = [];
+  dropDeadHotbar(p);
+  log("Your skill points are back in your hands.");
+  persist();
+  bump();
+}
+
+const POOL_MIN: Record<0 | 1 | 2, number> = { 0: 2, 1: 30, 2: 62 };
+
+/** Beta: switch to any job at any time. Stats and skills reset for free. */
+export function betaSetJob(job: JobId) {
+  const p = world.player;
+  if (!p) return;
+  const tier = JOBS[job].tier;
+  const pool = Math.max(skillPool(p), POOL_MIN[tier]);
   p.job = job;
+  applyStatReset(p);
+  p.skills = {};
+  p.skillPoints = pool;
+  p.buffs = [];
+  p.jobLevel = Math.max(p.jobLevel, tier === 2 ? 40 : tier === 1 ? 10 : 1);
   let returned = false;
   for (const slot of Object.keys(p.eq) as GearSlot[]) {
     const id = p.eq[slot];
@@ -897,14 +943,44 @@ export function changeJob(job: JobId) {
     returned = true;
   }
   if (returned) log("Gear this job can't wear went back to the bag.");
-  p.jobLevel = 1;
-  p.jobExp = 0;
-  p.skillPoints += 1;
-  log(`Seren witnesses you as a ${JOBS[job].name}.`);
+  dropDeadHotbar(p);
+  const d = derive(p);
+  p.hp = d.maxHp;
+  p.sp = d.maxSp;
+  autoEquip(true);
+  log(`You are now a ${JOBS[job].name}. Stats and skills are reset: spend them again.`);
   sfxLevel();
   burst(p.x, p.y - 40, "#e4b15a");
   persist();
   bump();
+}
+
+/** Beta: jump to a base level (stats and skills reset). */
+export function betaSetLevel(level: number) {
+  const p = world.player;
+  if (!p) return;
+  const lv = Math.max(1, Math.min(MAX_BASE, Math.round(level)));
+  p.baseLevel = lv;
+  p.baseExp = 0;
+  p.jobLevel = Math.max(1, Math.min(MAX_JOB, Math.round(lv * 0.85)));
+  p.jobExp = 0;
+  applyStatReset(p);
+  const pool = Math.max(skillPool(p), POOL_MIN[JOBS[p.job].tier], p.jobLevel + 1);
+  p.skills = {};
+  p.skillPoints = pool;
+  p.buffs = [];
+  dropDeadHotbar(p);
+  const d = derive(p);
+  p.hp = d.maxHp;
+  p.sp = d.maxSp;
+  log(`Level set to ${lv}. Stats and skills are reset.`);
+  persist();
+  bump();
+}
+
+/** Kept for the old NPC action; the beta lets anyone take any job. */
+export function changeJob(job: JobId) {
+  betaSetJob(job);
 }
 
 export function grantKill(kind: Monster["kind"], mx?: number, my?: number) {
@@ -1027,22 +1103,15 @@ export function openNpc(id: string) {
       ],
     };
   } else if (npc.role === "job") {
-    const choices =
-      p.job === "novice" && p.baseLevel >= 4 && p.jobLevel >= 4
-        ? [
-            { label: "Swordman", action: "job:swordman" },
-            { label: "Mage", action: "job:mage" },
-            { label: "Archer", action: "job:archer" },
-            { label: "Not yet", action: "close" },
-          ]
-        : [{ label: "I see", action: "close" }];
-    const line =
-      p.job !== "novice"
-        ? `You already walk as a ${JOBS[p.job].name}. Novice skills stay with you. Spend the new points on this job.`
-        : p.baseLevel < 4 || p.jobLevel < 4
-          ? "A Novice changes job at base level 4 and job level 4. Southmead teaches both. The classic gate is job level 10; this plaza keeps the short road."
-          : "Choose Swordman, Mage, or Archer. The choice stays.";
-    world.dialog = { speaker: npc.name, lines: [npc.line, line], index: 0, choices };
+    world.dialog = {
+      speaker: npc.name,
+      lines: [npc.line, "This is the beta: change to any job, first or second, whenever you like. Stats and skill points reset for free."],
+      index: 0,
+      choices: [
+        { label: "Open job change", action: "beta" },
+        { label: "Leave", action: "close" },
+      ],
+    };
   } else {
     const choices = [
       { label: "Heal", action: "heal" },
@@ -1102,6 +1171,8 @@ export function doAction(action: string) {
     give("sun-cap", 1);
     sfxCoin();
     log("Maela hands you a sun cap and 150 zeny.");
+  } else if (action === "beta") {
+    world.panels.beta = true;
   } else if (action.startsWith("job:")) {
     changeJob(action.slice(4) as JobId);
   }

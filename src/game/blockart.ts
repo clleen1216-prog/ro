@@ -515,12 +515,29 @@ function face(c: Ctx, dir: number, tn: number) {
 
 function headgear(c: Ctx, p: ActorParts, dir: number) {
   const side = dir === 1 || dir === 2;
-  const jb = p.job;
-  const u = p.upper ?? (jb === "archer" ? { hat: "feather", tint: "#3f7a34" } : jb === "mage" ? { hat: "wizard", tint: "#4a44b8" } : undefined);
-  if (jb === "swordman" && !p.upper) {
-    B(c, -7, -26, 14, 1, "#d03030", 0, false);
-    if (dir === 3) B(c, -2, -25, 3, 3, "#d03030", 0, false);
-    if (side) B(c, -9, -26, 3, 3, "#d03030", 0, false);
+  const jl = JOB_LOOK[p.job ?? ""];
+  const u = p.upper ?? jl?.hat;
+  if (u?.hat === "headband" || u?.hat === "bandana") {
+    const th = u.hat === "bandana" ? 3 : 1;
+    B(c, -7, -27 + (th === 3 ? 0 : 1), 14, th, u.tint, 0, false);
+    if (dir === 3) B(c, -2, -25, 3, 5, u.tint, 0, false);
+    if (side) B(c, -10, -26, 4, 4, u.tint, 0, false);
+  } else if (u?.hat === "hood") {
+    if (dir === 0) {
+      B(c, -8, -31, 16, 6, u.tint, 0.1);
+      B(c, -8, -25, 3, 10, u.tint, 0.1);
+      B(c, 5, -25, 3, 10, u.tint, 0.1);
+    } else if (dir === 3) B(c, -8, -31, 16, 17, u.tint, 0.1);
+    else {
+      B(c, -8, -31, 16, 6, u.tint, 0.1);
+      B(c, -8, -25, 8, 11, u.tint, 0.1);
+    }
+  } else if (u?.hat === "helm") {
+    B(c, -7, -31, 14, 7, "#aeb8c4", 0.08);
+    B(c, -7, -26, 14, 1, "#7a8290", 0, false);
+    if (dir === 0) B(c, -1, -25, 2, 5, "#9aa4b0", 0, false);
+    B(c, -1, -36, 2, 5, u.tint, 0.05, false);
+    B(c, side ? -3 : -1, -36, side ? 4 : 2, 2, u.tint, 0, false);
   }
   if (u?.hat === "wizard") {
     B(c, -10, -27, 20, 2, u.tint, 0.1);
@@ -545,7 +562,7 @@ function headgear(c: Ctx, p: ActorParts, dir: number) {
     B(c, -5, -33, 10, 7, shade(u.tint, 0.05), 0.1);
     B(c, -5, -28, 10, 1, shade(u.tint, -0.3), 0, false);
   }
-  const m = p.mid;
+  const m = p.mid ?? jl?.mid;
   if (m?.hat === "glasses" && dir !== 3) {
     c.fillStyle = m.tint;
     if (dir === 0) {
@@ -611,6 +628,60 @@ function weapon(c: Ctx, w: NonNullable<ActorParts["weapon"]>, x: number, y: numb
       c.fillRect(Math.round(nx + 1 * xs), Math.round(y - 1), 2, 1);
       c.fillRect(Math.round(nx + 1 * xs), Math.round(y + 1), 2, 1);
     }
+  } else if (kind === "spear") {
+    line(c, x - ca * 12 * xs, y - sa * 12, ang, 46, 1, "#8a6238", xs);
+    const tx = x + ca * 32 * xs;
+    const ty = y + sa * 32;
+    line(c, tx, ty, ang, 8, 3, "#d5d9e0", xs, 0);
+    line(c, tx, ty, ang, 8, 1, "#ffffff", xs, 1);
+    line(c, x + ca * 28 * xs, y + sa * 28, ang, 3, 2, w.tint, xs);
+  } else if (kind === "mace") {
+    line(c, x - ca * 3 * xs, y - sa * 3, ang, 16, 2, "#7a5632", xs);
+    const tx = x + ca * 13 * xs;
+    const ty = y + sa * 13;
+    B(c, tx - 3, ty - 3, 6, 6, w.tint, 0.1);
+    c.fillStyle = hi;
+    c.fillRect(Math.round(tx - 2), Math.round(ty - 2), 2, 2);
+    c.fillStyle = "#4a4f58";
+    c.fillRect(Math.round(tx - 4), Math.round(ty - 1), 1, 2);
+    c.fillRect(Math.round(tx + 3), Math.round(ty - 1), 1, 2);
+  } else if (kind === "axe") {
+    line(c, x - ca * 3 * xs, y - sa * 3, ang, 20, 2, "#7a5632", xs);
+    const tx = x + ca * 15 * xs;
+    const ty = y + sa * 15;
+    B(c, tx - 1, ty - 4, 7, 8, w.tint, 0.08);
+    c.fillStyle = hi;
+    c.fillRect(Math.round(tx + 3), Math.round(ty - 3), 2, 6);
+    c.fillStyle = "#4a4f58";
+    c.fillRect(Math.round(tx - 2), Math.round(ty - 1), 2, 3);
+  } else if (kind === "katar") {
+    line(c, x, y, ang, 3, 3, "#5c3a28", xs, 0);
+    line(c, x + ca * 3 * xs, y + sa * 3, ang, 13, 3, "#cfd6de", xs, 0);
+    line(c, x + ca * 3 * xs, y + sa * 3, ang, 13, 1, "#f2f6fa", xs, 1);
+    line(c, x + ca * 2 * xs - sa * 3 * xs, y + sa * 2 + ca * 3, ang, 8, 1, "#aeb8c4", xs);
+    line(c, x + ca * 2 * xs + sa * 3 * xs, y + sa * 2 - ca * 3, ang, 8, 1, "#aeb8c4", xs);
+  } else if (kind === "knuckle") {
+    B(c, x - 2, y - 2, 5, 5, w.tint, 0.08);
+    c.fillStyle = hi;
+    c.fillRect(Math.round(x + 2), Math.round(y - 2), 1, 1);
+    c.fillRect(Math.round(x + 2), Math.round(y + 1), 1, 1);
+    c.fillStyle = "#4a4f58";
+    c.fillRect(Math.round(x + 3 * xs), Math.round(y - 1), 1, 3);
+  } else if (kind === "harp") {
+    line(c, x - ca * 6 * xs, y - sa * 6, ang, 18, 1, "#7a5632", xs);
+    const bx = x + ca * 8 * xs;
+    const by = y + sa * 8;
+    B(c, bx - 3, by - 4, 7, 9, w.tint, 0.1);
+    c.fillStyle = hi;
+    c.fillRect(Math.round(bx - 2), Math.round(by - 3), 2, 7);
+    c.fillStyle = "#f4efe0";
+    c.fillRect(Math.round(bx), Math.round(by - 3), 1, 7);
+    if (glow > 0.3) {
+      c.fillStyle = `rgba(255,220,255,${glow * 0.7})`;
+      c.fillRect(Math.round(bx + 5), Math.round(by - 4), 2, 2);
+      c.fillRect(Math.round(bx + 7), Math.round(by - 7), 2, 2);
+      c.fillRect(Math.round(bx + 4), Math.round(by - 8), 1, 3);
+    }
   } else if (kind === "staff") {
     line(c, x - ca * 7 * xs, y - sa * 7, ang, 36, 2, "#7a5632", xs);
     const tx = x + ca * 28 * xs;
@@ -643,12 +714,13 @@ function shield(c: Ctx, s: NonNullable<ActorParts["shield"]>, x: number, y: numb
   B(c, x + 2, y + 1, 2, 7, shade(s.tint, 0.3), 0, false);
 }
 
-const REST: Record<string, number> = { sword: -55, dagger: -40, staff: -85, bow: -90 };
+const REST: Record<string, number> = { sword: -55, dagger: -40, staff: -85, bow: -90, mace: -55, axe: -55, spear: -75, katar: -40, knuckle: -35, harp: -70 };
 
 type Pose = { hand?: number; rest?: number; ang: number; bend: number; lunge: number; wang?: number; far?: number; pull: number; glow: number; nock: boolean };
 
 /** Per-weapon attack animation. Release moments match the damage timing in sim.ts. */
-function poseFor(wk: string, a: number): Pose {
+function poseFor(wk0: string, a: number): Pose {
+  const wk = wk0 === "spear" || wk0 === "katar" || wk0 === "knuckle" ? "dagger" : wk0 === "harp" ? "staff" : wk0;
   const base = atkPose(a);
   if (a < 0 || (wk !== "bow" && wk !== "staff" && wk !== "dagger")) return { ...base, pull: 0, glow: 0, nock: false };
   if (wk === "bow") {
@@ -688,10 +760,36 @@ function poseFor(wk: string, a: number): Pose {
   return { ang: lerp(0, 90, e), bend: 0, wang: lerp(0, -40, e), lunge: lerp(3, 0, e), pull: 0, glow: 0, nock: false };
 }
 
-const JOB_LOOK: Record<string, { shirt: string; pants: string; robe?: string }> = {
-  swordman: { shirt: "#b8433a", pants: "#4a3a30" },
-  archer: { shirt: "#4f8a3a", pants: "#6a5236" },
-  mage: { shirt: "#5a4fb0", pants: "#3b3482", robe: "#4b3fa0" },
+type JobLook = {
+  shirt: string;
+  pants: string;
+  robe?: string;
+  hat?: { hat: string; tint: string };
+  mid?: { hat: string; tint: string };
+  pads?: string;
+  quiver?: boolean;
+  scarf?: string;
+};
+
+const JOB_LOOK: Record<string, JobLook> = {
+  swordman: { shirt: "#b8433a", pants: "#4a3a30", pads: "#aeb8c4", hat: { hat: "headband", tint: "#d03030" } },
+  knight: { shirt: "#8c93a3", pants: "#3a3f4a", pads: "#d4dae4", hat: { hat: "helm", tint: "#c33a3a" } },
+  crusader: { shirt: "#e8eaf2", pants: "#2f4a8c", pads: "#d2a23a", hat: { hat: "helm", tint: "#3a5ab0" }, scarf: "#2f4a8c" },
+  mage: { shirt: "#5a4fb0", pants: "#3b3482", robe: "#4b3fa0", hat: { hat: "wizard", tint: "#4a44b8" } },
+  wizard: { shirt: "#2a2f7a", pants: "#1f2358", robe: "#262b72", hat: { hat: "wizard", tint: "#232866" } },
+  sage: { shirt: "#2f7a64", pants: "#245a4a", robe: "#2a6e5a", hat: { hat: "brim", tint: "#2f7a64" }, mid: { hat: "glasses", tint: "#222222" } },
+  archer: { shirt: "#4f8a3a", pants: "#6a5236", quiver: true, hat: { hat: "feather", tint: "#3f7a34" } },
+  hunter: { shirt: "#3a6a3a", pants: "#5a4630", quiver: true, hat: { hat: "hood", tint: "#4a5a32" } },
+  bard: { shirt: "#a84a9a", pants: "#3a2a5a", hat: { hat: "feather", tint: "#c04ab0" }, scarf: "#e4b15a" },
+  acolyte: { shirt: "#f1ead8", pants: "#cfc4a8", robe: "#e8e0c8" },
+  priest: { shirt: "#f6f6fa", pants: "#d8d8e4", robe: "#f2f2f8", hat: { hat: "circlet", tint: "#e4b15a" } },
+  monk: { shirt: "#e8923a", pants: "#7a4a20", hat: { hat: "headband", tint: "#f4f0e8" } },
+  thief: { shirt: "#4a4f58", pants: "#2e3138", hat: { hat: "bandana", tint: "#8a3a3a" } },
+  assassin: { shirt: "#1f2228", pants: "#15171b", hat: { hat: "hood", tint: "#22252b" }, mid: { hat: "mask", tint: "#2a2d34" } },
+  rogue: { shirt: "#6a5a3a", pants: "#3a4a2a", hat: { hat: "bandana", tint: "#2f6a4a" } },
+  merchant: { shirt: "#b87a3a", pants: "#5a4630", hat: { hat: "cap", tint: "#c9a43a" } },
+  blacksmith: { shirt: "#8a5a3a", pants: "#3a3a3a", pads: "#6a6e76", hat: { hat: "cap", tint: "#5a5a62" }, mid: { hat: "glasses", tint: "#9aa4b0" } },
+  alchemist: { shirt: "#f0f0f4", pants: "#4a4a6a", robe: "#eeeef4", mid: { hat: "glasses", tint: "#e4b15a" }, hat: { hat: "cap", tint: "#7aa0c8" } },
 };
 
 /**
@@ -756,7 +854,7 @@ export function drawBlockActor(
     }
     c.save();
     c.translate(0, sy + yb + idle);
-    if (parts.job === "archer" && front) B(c, 3 + tn * 2, -19, 2, 6, "#6b4a2b", 0, false);
+    if (jl?.quiver && front) B(c, 3 + tn * 2, -19, 2, 6, "#6b4a2b", 0, false);
     const nearX = tn * 5.5;
     const farX = -tn * 2.5;
     const wpnX = tn === 0 ? (front ? 5.5 : -5.5) : front ? (tn > 0 ? nearX : farX) : tn > 0 ? farX : nearX;
@@ -785,8 +883,8 @@ export function drawBlockActor(
       limbPx(c, othX, -14, armO, 8, 3, shirt, SKIN, 0.45, xs);
       limbPx(c, wpnX, -14, rightAng, 8, 3, shirt, SKIN, 0.45, xs);
     }
-    if (parts.armor || parts.job === "swordman") {
-      const pc = parts.armor ? shade(shirt, 0.25) : "#aeb8c4";
+    if (parts.armor || jl?.pads) {
+      const pc = parts.armor ? shade(shirt, 0.25) : jl!.pads!;
       B(c, -7 + tn, -15, 3, 2, pc, 0.05);
       B(c, 4 + tn, -15, 3, 2, pc, 0.05);
     }
@@ -795,7 +893,7 @@ export function drawBlockActor(
       B(c, tx0 + tw / 2 - 1, -9, 2, 7, shade(jl.robe, 0.2), 0, false);
       B(c, tx0 - 1, -3, tw + 2, 1, "#e4b15a", 0, false);
     }
-    if (parts.job === "archer" && dir === 3) {
+    if (jl?.quiver && dir === 3) {
       B(c, -2 + tn, -20, 5, 11, "#6b4a2b", 0.1);
       B(c, -2 + tn, -22, 1, 2, "#e8e8e8", 0, false);
       B(c, 0 + tn, -23, 1, 3, "#e8e8e8", 0, false);
@@ -806,6 +904,7 @@ export function drawBlockActor(
       else B(c, tx0 - 1, -15, tw + 2, 2, parts.garment.tint, 0.1);
     }
     if (parts.lower?.hat === "scarf") B(c, tx0 - 1, -16, tw + 2, 3, parts.lower.tint, 0.1, false);
+    else if (jl?.scarf) B(c, tx0 - 1, -16, tw + 2, 2, jl.scarf, 0.1, false);
     c.save();
     c.translate(tn, 0);
     B(c, -6, -26, 12, 11, SKIN, 0.08);
@@ -836,7 +935,7 @@ export function drawBlockActor(
     const farAng = sit ? 90 : 90 - s * 36;
     const bowDraw = atk >= 0 && wk === "bow" && pose.hand !== undefined;
     if (!bowDraw) limbPx(c, 0, -13, farAng, 8, 3, shade(shirt, -0.2), shade(SKIN, -0.12), 0.45);
-    if (parts.job === "archer") {
+    if (jl?.quiver) {
       B(c, -6, -19, 3, 9, "#6b4a2b", 0.1, false);
       B(c, -6, -21, 1, 2, "#e8e8e8", 0, false);
       B(c, -4, -22, 1, 3, "#e8e8e8", 0, false);
@@ -864,7 +963,7 @@ export function drawBlockActor(
       limbPx(c, 0, -13, upA, 5, 3, shirt, shirt, 0.5);
       limbPx(c, ex2, ey2, loA, 5, 3, shirt, SKIN, 0.3);
     }
-    if (parts.armor || parts.job === "swordman") B(c, -2, -15, 3, 2, parts.armor ? shade(shirt, 0.25) : "#aeb8c4", 0.05);
+    if (parts.armor || jl?.pads) B(c, -2, -15, 3, 2, parts.armor ? shade(shirt, 0.25) : jl!.pads!, 0.05);
     if (jl?.robe) B(c, -4, -9, 7, 7, jl.robe, 0.12);
     if (parts.weapon) {
       const ex = Math.cos(rad(nearAng)) * 8;

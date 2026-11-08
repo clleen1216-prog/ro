@@ -1,7 +1,7 @@
 import { EPX } from "@/game/blocky";
 import { sfxBow, sfxCast, sfxDown, sfxFoot, sfxHeal, sfxHit, sfxMiss, sfxPickup, sfxPortal, sfxSwing } from "@/game/audio";
 import { ITEMS, MONSTERS, SKILLS, TILE, getMap, isBlocked } from "@/game/content";
-import type { Dir, Drop, MapId, Monster, SkillId } from "@/game/types";
+import type { BuffStat, Dir, Drop, MapId, Monster, SkillDef, SkillId } from "@/game/types";
 import { INV_CAP, autoEquip, bump, burst, derive, dust, enterMap, float, grantKill, log, openNpc, useStack, world } from "@/game/world";
 
 function logPickup(name: string, rare?: boolean) {
@@ -258,17 +258,18 @@ export function basicAttack() {
   p.attackCd = d.aspd;
   const weapon = p.eq.weapon ? ITEMS[p.eq.weapon] : undefined;
   const kind = weapon?.weapon;
-  const ranged = kind === "bow" || kind === "staff";
+  const ranged = kind === "bow" || kind === "staff" || kind === "harp";
+  const magicHit = kind === "staff" || kind === "harp";
   world.swingMax = ranged ? Math.max(0.4, Math.min(0.62, d.aspd * 0.55)) : Math.max(0.26, Math.min(0.42, d.aspd * 0.45));
   p.swing = world.swingMax;
-  const rel = world.swingMax * (kind === "bow" ? 0.55 : kind === "staff" ? 0.5 : kind === "dagger" ? 0.45 : 0.4);
+  const rel = world.swingMax * (kind === "bow" ? 0.55 : kind === "staff" || kind === "harp" ? 0.5 : kind === "dagger" || kind === "katar" || kind === "spear" || kind === "knuckle" ? 0.45 : 0.4);
   const dd = dist(p.x, p.y, target.x, target.y);
   const fl = ranged ? dd / (kind === "bow" ? 1000 : 720) : 0;
   const px0 = p.x;
   const py0 = p.y;
   later(rel, () => {
     if (kind === "bow") sfxBow();
-    else if (kind === "staff") sfxCast();
+    else if (kind === "staff" || kind === "harp") sfxCast();
     else sfxSwing();
     if (ranged) shoot(kind === "bow" ? "arrow" : "bolt", p.x + Math.sign(target.x - px0) * 14, p.y - 40, target.x, target.y - 34, kind === "bow" ? "#e8dcb8" : weapon?.tint ?? "#8fb4ff", Math.max(0.05, fl));
   });
@@ -281,7 +282,7 @@ export function basicAttack() {
     return;
   }
   const st = MONSTERS[target.kind]!;
-  let raw = kind === "staff" ? d.matk * 0.95 + d.atk * 0.4 - st.mdef * 0.5 : d.atk - st.def * 0.55;
+  let raw = magicHit ? d.matk * 0.95 + d.atk * 0.4 - st.mdef * 0.5 : d.atk - st.def * 0.55;
   raw *= 0.9 + Math.random() * 0.2;
   let crit = false;
   if (Math.random() * 100 < d.crit) {
@@ -291,7 +292,7 @@ export function basicAttack() {
   const dmg = Math.max(1, Math.round(raw));
   later(rel + fl, () => {
     if (!target.alive) return;
-    hurtNow(target, dmg, crit ? "#e4b15a" : kind === "staff" ? "#bcd4ff" : "#f6f0e4");
+    hurtNow(target, dmg, crit ? "#e4b15a" : magicHit ? "#bcd4ff" : "#f6f0e4");
     sfxHit();
     world.shake = Math.min(5, world.shake + (crit ? 3 : 1.4));
   });
@@ -359,6 +360,113 @@ function hurtNow(m: Monster, dmg: number, color: string) {
   }
 }
 
+function runFx(sk: SkillDef, lv: number, d: ReturnType<typeof derive>, target: Monster | null): boolean {
+  const p = world.player!;
+  const fx = sk.fx!;
+  if (fx.t === "heal") {
+    healSelf(Math.round((fx.heal! + (fx.hr ?? 0) * lv) * (1 + d.int / 60)));
+    for (const b of fx.buff ?? []) addBuff(b.stat, b.a + b.ar * lv, b.dur);
+    burst(p.x, p.y - 30, "#9ae08a");
+    return true;
+  }
+  if (fx.t === "buff") {
+    for (const b of fx.buff ?? []) addBuff(b.stat, Math.round(b.a + b.ar * lv), b.dur);
+    if (fx.hide) {
+      p.feign = 0;
+      world.targetId = null;
+      world.path = [];
+      for (const m of world.monsters) m.aggro = false;
+    }
+    burst(p.x, p.y - 30, "#e4b15a");
+    return true;
+  }
+  const st = (m: Monster) => MONSTERS[m.kind]!;
+  const hitOne = (m: Monster, order: number, mult: number) => {
+    const hits = Math.max(1, Math.round((fx.n ?? 1) + (fx.nr ?? 0) * lv));
+    for (let i = 0; i < hits; i++) {
+      later(hitDelay + i * 0.09 + order * 0.04, () => {
+        if (!m.alive) return;
+        const defv = fx.ign ? 0 : fx.mg ? st(m).mdef * 0.35 : st(m).def * 0.4;
+        let raw = (fx.mg ? d.matk : d.atk * (1 + (fx.dexBonus ?? 0) * d.dex)) * mult * (0.92 + Math.random() * 0.16) - defv;
+        let crit = false;
+        if (!fx.mg && Math.random() * 100 < d.crit * 0.5 + (fx.crit ?? 0)) {
+          raw *= 1.6;
+          crit = true;
+        }
+        if (!fx.mg && Math.random() > Math.min(0.99, 0.72 + d.hit / 500)) {
+          float(m.x, m.y - 56, "Miss", "#b7ad9c");
+          sfxMiss();
+          return;
+        }
+        hurtNow(m, Math.max(1, Math.round(raw)), crit ? "#e4b15a" : fx.col ?? "#f6f0e4");
+        sfxHit();
+      });
+    }
+    later(hitDelay + 0.02, () => {
+      if (!m.alive) return;
+      if (fx.stun) {
+        m.cd = Math.max(m.cd, fx.stun + (fx.sr ?? 0) * lv);
+        m.windup = 0;
+        float(m.x, m.y - 74, "Stun", "#f0e07a");
+      }
+      if (fx.psn) {
+        m.poison = fx.psn + (fx.pr ?? 0) * lv;
+        m.psnDps = Math.max(1, Math.round(d.atk * 0.22));
+        m.psnT = 1;
+      }
+      if (fx.kb) {
+        const dx = m.x - p.x;
+        const dy = m.y - p.y;
+        const len = Math.hypot(dx, dy) || 1;
+        const map = getMap(world.mapId);
+        const nx = m.x + (dx / len) * 34;
+        const ny = m.y + (dy / len) * 34;
+        if (!isBlocked(map, nx, m.y)) m.x = nx;
+        if (!isBlocked(map, m.x, ny)) m.y = ny;
+      }
+    });
+  };
+  let mult = (fx.m ?? 1) + (fx.r ?? 0) * lv;
+  if (fx.all) {
+    mult += Math.min(6, p.sp / 30);
+    p.sp = 0;
+  }
+  if (fx.t === "hit") {
+    if (!target) return false;
+    p.dir = face(target.x - p.x, target.y - p.y);
+    hitOne(target, 0, mult);
+    if (fx.loot) {
+      const gain = Math.round((10 + st(target).level * 3) * (0.6 + lv * 0.25));
+      later(hitDelay + 0.1, () => {
+        p.marks += gain;
+        float(p.x, p.y - 74, `+${gain}z`, "#e4b15a");
+      });
+    }
+    return true;
+  }
+  // area
+  const origin = fx.self ? p : target ?? p;
+  const radius = (fx.rad ?? 90) + (fx.rr ?? 0) * lv;
+  let hits = 0;
+  for (const m of world.monsters) {
+    if (!m.alive || dist(origin.x, origin.y, m.x, m.y) > radius) continue;
+    hitOne(m, hits, mult);
+    hits++;
+  }
+  if (hits === 0) {
+    float(p.x, p.y - 40, "No one there", "#b7ad9c");
+    return false;
+  }
+  if (fx.self) {
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      burst(p.x + Math.cos(a) * radius * 0.7, p.y - 20 + Math.sin(a) * radius * 0.35, fx.col ?? "#f6f0e4");
+    }
+  }
+  world.shake = Math.min(8, world.shake + 4);
+  return true;
+}
+
 export function castSkill(id: SkillId) {
   try {
     castSkillInner(id);
@@ -396,7 +504,13 @@ function castSkillInner(id: SkillId) {
       return;
     }
   }
+  const fxz = sk.fx?.zeny ?? 0;
+  if (fxz && p.marks < fxz) {
+    float(p.x, p.y - 50, "Need zeny", "#e4b15a");
+    return;
+  }
   p.sp -= cost;
+  if (fxz) p.marks -= fxz;
   p.sit = false;
   p.feign = 0;
   p.attackCd = Math.max(p.attackCd, d.aspd * 0.75);
@@ -407,21 +521,24 @@ function castSkillInner(id: SkillId) {
   {
     // skills land at the moment of release/impact, not when the key is pressed
     const wk = p.eq.weapon ? ITEMS[p.eq.weapon]?.weapon : undefined;
-    const rangedSkill = ["spark", "frost", "ember", "twin", "shower", "storm"].includes(id);
-    const rel = rangedSkill ? world.swingMax * (wk === "bow" ? 0.55 : 0.5) : id === "firstAid" || id === "guard" || id === "focus" || id === "playDead" ? 0 : world.swingMax * 0.4;
+    const fxs = sk.fx;
+    const rangedSkill = ["spark", "frost", "ember", "twin", "shower", "storm"].includes(id) || !!(fxs && fxs.shot);
+    const rel = rangedSkill ? world.swingMax * (wk === "bow" ? 0.55 : 0.5) : id === "firstAid" || id === "guard" || id === "focus" || id === "playDead" || fxs?.t === "heal" || fxs?.t === "buff" ? 0 : world.swingMax * 0.4;
     const tgt = target ?? p;
     const fl = rangedSkill ? dist(p.x, p.y, tgt.x, tgt.y) / 760 : 0;
     hitDelay = rel + fl;
     if (rangedSkill) {
-      const col = id === "frost" ? "#8fd0f0" : id === "spark" || id === "ember" ? "#ff8a3a" : id === "storm" ? "#f2e46a" : "#e8dcb8";
-      const kind2 = id === "twin" ? "arrow" : id === "shower" ? "rain" : id === "storm" ? "strike" : "bolt";
+      const col = fxs?.col ?? (id === "frost" ? "#8fd0f0" : id === "spark" || id === "ember" ? "#ff8a3a" : id === "storm" ? "#f2e46a" : "#e8dcb8");
+      const kind2 = fxs?.shot ?? (id === "twin" ? "arrow" : id === "shower" ? "rain" : id === "storm" ? "strike" : "bolt");
       later(rel, () => {
         shoot(kind2, p.x + Math.sign(tgt.x - p.x) * 14, p.y - 40, tgt.x, tgt.y - (kind2 === "rain" || kind2 === "strike" ? 0 : 34), col, Math.max(0.08, fl));
         if (id === "twin") later(0.08, () => shoot("arrow", p.x + Math.sign(tgt.x - p.x) * 14, p.y - 40, tgt.x, tgt.y - 30, col, Math.max(0.08, fl)));
       });
     }
   }
-  if (id === "firstAid") healSelf(8 + p.baseLevel * 3);
+  if (sk.fx && sk.fx.t !== "passive") {
+    if (!runFx(sk, lv, d, target)) p.sp += cost;
+  } else if (id === "firstAid") healSelf(8 + p.baseLevel * 3);
   else if (id === "playDead") {
     p.feign = 5.5;
     p.sit = true;
@@ -597,7 +714,7 @@ function healSelf(amount: number) {
   sfxHeal();
 }
 
-function addBuff(stat: "atk" | "def" | "flee" | "hit", amount: number, seconds: number) {
+function addBuff(stat: BuffStat, amount: number, seconds: number) {
   const p = world.player;
   if (!p) return;
   p.buffs = p.buffs.filter((b) => b.stat !== stat);
@@ -775,6 +892,14 @@ function updateMonsters(dt: number) {
   const hidden = p.downFor > 0 || p.feign > 0;
   for (const m of world.monsters) {
     m.hurt = Math.max(0, m.hurt - dt);
+    if (m.alive && (m.poison ?? 0) > 0) {
+      m.poison = m.poison! - dt;
+      m.psnT = (m.psnT ?? 1) - dt;
+      if (m.psnT <= 0) {
+        m.psnT += 1;
+        hurtNow(m, m.psnDps ?? 1, "#9a5ad0");
+      }
+    }
     m.cd = Math.max(0, m.cd - dt);
     m.lunge = Math.max(0, m.lunge - dt);
     m.spawnT = Math.max(0, m.spawnT - dt);
@@ -1102,6 +1227,9 @@ function autoStep(dt: number, d: ReturnType<typeof derive>) {
         if (!sk || lv <= 0 || world.auto.skills[id] === false) return false;
         if (sk.target === "passive") return false;
         const buff = sk.target === "self";
+        if (buff && sk.fx?.t === "heal") return p.hp < derive(p).maxHp * 0.6;
+        if (buff && sk.fx?.t === "buff" && sk.fx.hide) return false;
+        if (buff && sk.fx?.t === "buff" && world.auto.skills[id] === true) return !(sk.fx.buff ?? []).every((b) => p.buffs.some((x) => x.stat === b.stat && x.until > world.time + 3));
         if (buff && (id === "playDead" || id === "firstAid" || world.auto.skills[id] !== true)) return false;
         return p.sp >= sk.sp + Math.max(0, lv - 1) * 2 + 4;
       });

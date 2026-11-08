@@ -1,6 +1,28 @@
 export type Dir = 0 | 1 | 2 | 3;
 export type MapId = "ambercross" | "southmead" | "poring" | "woods" | "dunes" | "crypt" | "orc";
-export type JobId = "novice" | "swordman" | "mage" | "archer";
+import type { NEW_SKILLS } from "@/game/skills2";
+
+export type NewSkillId = keyof typeof NEW_SKILLS;
+export type JobId =
+  | "novice"
+  | "swordman"
+  | "mage"
+  | "archer"
+  | "acolyte"
+  | "thief"
+  | "merchant"
+  | "knight"
+  | "crusader"
+  | "wizard"
+  | "sage"
+  | "hunter"
+  | "bard"
+  | "priest"
+  | "monk"
+  | "assassin"
+  | "rogue"
+  | "blacksmith"
+  | "alchemist";
 export type HairStyle = "bob" | "short" | "swept" | "spiky" | "undercut" | "pompadour" | "ponytail" | "twintail" | "long" | "bun" | "braid" | "curly" | "odango" | "wavy";
 export type MonsterKind = string;
 export type Behavior = "passive" | "skittish" | "aggressive";
@@ -29,7 +51,52 @@ export type SkillId =
   | "crush"
   | "frost"
   | "storm"
-  | "shower";
+  | "shower"
+  | NewSkillId;
+
+export type SkillFx = {
+  t: "hit" | "area" | "heal" | "buff" | "passive";
+  /** damage multiplier = m + r * rank */
+  m?: number;
+  r?: number;
+  /** hits = n + nr * rank */
+  n?: number;
+  nr?: number;
+  mg?: boolean;
+  rng?: boolean;
+  rad?: number;
+  rr?: number;
+  col?: string;
+  shot?: "bolt" | "arrow" | "strike" | "rain";
+  stun?: number;
+  sr?: number;
+  kb?: boolean;
+  psn?: number;
+  pr?: number;
+  ign?: boolean;
+  zeny?: number;
+  crit?: number;
+  all?: boolean;
+  self?: boolean;
+  hide?: boolean;
+  loot?: number;
+  dexBonus?: number;
+  heal?: number;
+  hr?: number;
+  buff?: { stat: BuffStat; a: number; ar: number; dur: number }[];
+  pass?: Partial<Record<"atk" | "matk" | "def" | "hit" | "flee" | "crit" | "hp" | "sp" | "aspd" | "disc", number>>;
+};
+
+export type SkillDef = {
+  id: SkillId;
+  name: string;
+  job: JobId;
+  sp: number;
+  max: number;
+  blurb: string;
+  target: "self" | "enemy" | "area" | "passive";
+  fx?: SkillFx;
+};
 export type HatKind = "cap" | "circlet" | "brim" | "feather" | "glasses" | "mask" | "scarf" | "ribbon";
 export type IconKind =
   | "cap"
@@ -43,6 +110,12 @@ export type IconKind =
   | "sword"
   | "staff"
   | "bow"
+  | "mace"
+  | "spear"
+  | "axe"
+  | "katar"
+  | "knuckle"
+  | "harp"
   | "shield"
   | "cape"
   | "armor"
@@ -67,8 +140,8 @@ export type IconKind =
   | "cloth"
   | "wingfly"
   | "mucus";
-export type WeaponKind = "dagger" | "sword" | "staff" | "bow";
-export type BuffStat = "atk" | "def" | "flee" | "hit";
+export type WeaponKind = "dagger" | "sword" | "staff" | "bow" | "mace" | "spear" | "axe" | "katar" | "knuckle" | "harp";
+export type BuffStat = "atk" | "def" | "flee" | "hit" | "aspd" | "crit" | "matk";
 
 export type Stack = { itemId: string; qty: number };
 export type HotSlot = { kind: "skill"; id: SkillId } | { kind: "item"; id: string };
@@ -153,6 +226,9 @@ export type Monster = {
   kby: number;
   /** pop-in timer after respawn */
   spawnT: number;
+  poison?: number;
+  psnDps?: number;
+  psnT?: number;
 };
 
 export type Drop = {

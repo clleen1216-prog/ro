@@ -1,5 +1,5 @@
 import { useEffect, useRef, useSyncExternalStore } from "react";
-import { Backpack, CircleHelp, Compass, Shield, SlidersHorizontal, Sparkles, Swords, UserRound, Volume2, VolumeX, X } from "lucide-react";
+import { Backpack, Crown, CircleHelp, Compass, Shield, SlidersHorizontal, Sparkles, Swords, UserRound, Volume2, VolumeX, X } from "lucide-react";
 import { loadAll } from "@/game/assets";
 import { setMusicOn, setTrack, sfxClick, tick, trackTitle, unlock } from "@/game/audio";
 import {
@@ -12,6 +12,8 @@ import {
   SLOT_LABEL,
   SMITH_STOCK,
   STYLES,
+  JOB_ORDER,
+  skillAvail,
   SUPPLY_STOCK,
   TRIMS,
   MAP_IDS,
@@ -54,6 +56,10 @@ import {
   world,
   INV_CAP,
   autoEquip,
+  betaSetJob,
+  betaSetLevel,
+  resetSkills,
+  resetStats,
   junkIndexes,
   sellJunk,
 } from "@/game/world";
@@ -457,6 +463,9 @@ export function GameApp() {
               <IconBtn label="Auto Battle settings" onClick={() => togglePanel("auto")} active={world.panels.auto}>
                 <SlidersHorizontal />
               </IconBtn>
+              <IconBtn label="Job change (Beta)" onClick={() => togglePanel("beta")} active={world.panels.beta}>
+                <Crown />
+              </IconBtn>
               <IconBtn label="Auto Navigation (N)" onClick={() => togglePanel("nav")} active={Boolean(world.auto.travel)}>
                 <Compass />
               </IconBtn>
@@ -557,6 +566,7 @@ export function GameApp() {
             {world.panels.help && <HelpWindow />}
             {world.panels.nav && <NavWindow />}
             {world.panels.auto && <AutoWindow />}
+            {world.panels.beta && <BetaWindow />}
             {world.shop && <ShopWindow />}
             {world.storageOpen && <StorageWindow />}
           </div>
@@ -634,10 +644,65 @@ function IconBtn({ label, onClick, children, active }: { label: string; onClick:
   );
 }
 
+function BetaWindow() {
+  const p = world.player;
+  if (!p) return null;
+  const groups: { title: string; tier: 0 | 1 | 2 }[] = [
+    { title: "Novice", tier: 0 },
+    { title: "First jobs", tier: 1 },
+    { title: "Second jobs", tier: 2 },
+  ];
+  return (
+    <Window title="Job change (Beta)" onClose={() => togglePanel("beta")}>
+      <p className="text-xs text-muted">Beta test: switch to any job at any time. Stat points and skill points reset for free, and gear the new job cannot use goes back to your bag.</p>
+      <div className="mt-2 max-h-72 overflow-auto">
+        {groups.map((g) => (
+          <div key={g.tier} className="mb-2">
+            <p className="text-xs text-gold">{g.title}</p>
+            <div className="mt-1 flex flex-wrap gap-1">
+              {JOB_ORDER.filter((j) => JOBS[j].tier === g.tier).map((j) => (
+                <button
+                  key={j}
+                  type="button"
+                  title={`${JOBS[j].blurb}${JOBS[j].parent ? ` (from ${JOBS[JOBS[j].parent!].name})` : ""}`}
+                  className={`rounded-md border px-2 py-1 text-xs ${p.job === j ? "border-gold bg-surface-2 text-gold" : "border-line"}`}
+                  onClick={() => betaSetJob(j)}
+                >
+                  {JOBS[j].name}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="mt-1 text-xs">
+        Now: <span className="text-gold">{JOBS[p.job].name}</span> · {JOBS[p.job].blurb}
+      </p>
+      <p className="mt-1 text-[10px] text-muted">Weapons: {JOBS[p.job].weapons.join(", ")}</p>
+      <div className="mt-3 flex flex-wrap gap-1">
+        <button type="button" className="rounded-md bg-gold px-2 py-1 text-xs text-ink" onClick={() => resetStats()}>
+          Reset stat points
+        </button>
+        <button type="button" className="rounded-md bg-gold px-2 py-1 text-xs text-ink" onClick={() => resetSkills()}>
+          Reset skill points
+        </button>
+      </div>
+      <p className="mt-3 text-xs text-muted">Set base level (resets points)</p>
+      <div className="mt-1 flex flex-wrap gap-1">
+        {[1, 10, 20, 30, 40, 50, 60].map((n) => (
+          <button key={n} type="button" className={`rounded-md border px-2 py-1 text-xs ${p.baseLevel === n ? "border-gold" : "border-line"}`} onClick={() => betaSetLevel(n)}>
+            {n}
+          </button>
+        ))}
+      </div>
+    </Window>
+  );
+}
+
 function AutoWindow() {
   const p = world.player;
   if (!p) return null;
-  const list = (Object.keys(SKILLS) as SkillId[]).filter((id) => (SKILLS[id].job === "novice" || SKILLS[id].job === p.job) && SKILLS[id].target !== "passive" && (p.skills[id] ?? 0) > 0);
+  const list = (Object.keys(SKILLS) as SkillId[]).filter((id) => skillAvail(p.job, SKILLS[id]) && SKILLS[id].target !== "passive" && (p.skills[id] ?? 0) > 0);
   return (
     <Window title="Auto Battle" onClose={() => togglePanel("auto")}>
       <button
@@ -1008,7 +1073,7 @@ function BagWindow() {
 function SkillWindow() {
   const p = world.player;
   if (!p) return null;
-  const list = (Object.keys(SKILLS) as SkillId[]).filter((id) => SKILLS[id].job === "novice" || SKILLS[id].job === p.job);
+  const list = (Object.keys(SKILLS) as SkillId[]).filter((id) => skillAvail(p.job, SKILLS[id]));
   return (
     <Window title="Skills" onClose={() => togglePanel("skills")}>
       <p className="text-sm text-muted">
