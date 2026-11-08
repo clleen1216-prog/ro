@@ -56,6 +56,7 @@ export const world = {
   floats: [] as FloatText[],
   crits: [] as CritFx[],
   hitStop: 0,
+  bossBanner: null as { text: string; sub: string; t: number } | null,
   capSeen: { aspd: false, crit: false } as { aspd: boolean; crit: boolean },
   flash: 0,
   particles: [] as Particle[],
@@ -1071,6 +1072,7 @@ export function grantKill(kind: Monster["kind"], mx?: number, my?: number) {
   if (st.boss) {
     world.shake = Math.min(9, world.shake + 6);
     log(`${st.name} has fallen!`);
+    world.bossBanner = { text: `★ ${st.name} defeated ★`, sub: `+${exp} Base EXP · +${jexp} Job EXP`, t: 0 };
   }
   if (kind === "dew" && p.quest === "active") {
     p.questCount += 1;

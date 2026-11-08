@@ -428,6 +428,35 @@ export const MONSTER_DEFS: Record<string, MonsterDef> = {
   },
 };
 
+// Fancy headgear now drops from monsters that suit it (rate is a percentage).
+const HAT_DROPS: Record<string, [string, number][]> = {
+  poring: [["poring-hat", 0.2], ["santa-hat", 0.15]],
+  poporing: [["flower-wreath", 0.25], ["clown-nose", 0.6]],
+  lunatic: [["bunny-band", 0.25], ["lollipop", 0.8]],
+  fabre: [["straw-hat", 0.6]],
+  pupa: [["beret", 0.3]],
+  willow: [["flower-wreath", 0.2], ["rose", 0.5]],
+  rocker: [["bandana", 0.5], ["headband", 0.4]],
+  hornet: [["goggles", 0.2]],
+  creamy: [["clown-nose", 0.8], ["bunny-band", 0.15]],
+  scorpion: [["eyepatch", 0.25]],
+  "desert-wolf": [["cat-ears", 0.25]],
+  "peco-peco": [["straw-hat", 0.5], ["hard-hat", 0.3]],
+  familiar: [["devil-horns", 0.08], ["wizard-hat", 0.3]],
+  zombie: [["mustache", 0.4]],
+  skeleton: [["pirate-hat", 0.15]],
+  goblin: [["hard-hat", 0.5], ["lollipop", 0.7]],
+  "orc-zombie": [["beard", 0.4]],
+  "orc-warrior": [["viking-helm", 0.15], ["monocle", 0.2]],
+  "orc-skeleton": [["vampire-fangs", 0.1], ["top-hat", 0.12]],
+  "orc-hero": [["valkyrie-helm", 1.2], ["gold-crown", 1.2], ["crusader-helm", 4]],
+  "golden-bug": [["angel-halo", 1.5], ["star-mask", 2], ["top-hat", 3]],
+};
+for (const [mid, list] of Object.entries(HAT_DROPS)) {
+  const d = MONSTER_DEFS[mid];
+  if (d) for (const [id, rate] of list) d.drops.push({ id, rate });
+}
+
 for (const [id, def] of Object.entries(MONSTER_DEFS)) {
   RO_ITEMS[`${id}-card`] = card(id, def.name, def.level);
 }

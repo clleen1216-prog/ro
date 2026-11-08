@@ -1281,6 +1281,10 @@ export function step(dt0: number) {
     dt = dt0 * 0.1;
   }
   world.flash = Math.max(0, world.flash - dt0 * 1.6);
+  if (world.bossBanner) {
+    world.bossBanner.t += dt0;
+    if (world.bossBanner.t > 3.4) world.bossBanner = null;
+  }
   for (const c of world.crits) c.t += dt0;
   world.crits = world.crits.filter((c) => c.t < 0.45);
   runLater(dt);

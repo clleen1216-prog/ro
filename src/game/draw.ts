@@ -1044,6 +1044,31 @@ export function renderFrame(canvas: HTMLCanvasElement, dt: number) {
   ctx.globalAlpha = 1;
   ctx.restore();
 
+  if (world.bossBanner) {
+    const b = world.bossBanner;
+    const a = Math.min(1, b.t * 4, (3.4 - b.t) * 2.5);
+    const slide = (1 - Math.min(1, b.t * 5)) * -40;
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, a);
+    const y = cssH * 0.22 + slide;
+    const g = ctx.createLinearGradient(0, y - 30, 0, y + 40);
+    g.addColorStop(0, "rgba(20,14,6,0)");
+    g.addColorStop(0.5, "rgba(20,14,6,0.7)");
+    g.addColorStop(1, "rgba(20,14,6,0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, y - 30, cssW, 76);
+    ctx.textAlign = "center";
+    ctx.font = `700 26px ${FONT}`;
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = "#5a3a08";
+    ctx.strokeText(b.text, cssW / 2, y + 4);
+    ctx.fillStyle = "#ffd86a";
+    ctx.fillText(b.text, cssW / 2, y + 4);
+    ctx.font = `700 14px ${FONT}`;
+    ctx.fillStyle = "#f6f0e4";
+    ctx.fillText(b.sub, cssW / 2, y + 28);
+    ctx.restore();
+  }
   if (world.flash > 0.01) {
     ctx.fillStyle = `rgba(255,236,170,${world.flash})`;
     ctx.fillRect(0, 0, cssW, cssH);
