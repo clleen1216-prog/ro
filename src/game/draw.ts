@@ -672,7 +672,7 @@ export function renderFrame(canvas: HTMLCanvasElement, dt: number) {
       /* font optional */
     }
   }
-  const Z = Math.max(2, Math.min(5, Math.round((cssH / 150) * 0.8))) / 3; // ~80% world scale, kept on whole texel steps
+  const Z = Math.max(2, Math.round((cssH / 150) * 0.9 * 2)) / 6; // ~90% world scale in 1/6 steps (whole device pixels at 2x)
   world.zoom = Z;
   const vw = cssW / Z;
   const vh = cssH / Z;

@@ -677,7 +677,7 @@ function WardrobeWindow() {
           </button>
         ))}
         <span className="ml-auto text-muted">
-          {got}/{list.length} collected
+          {got}/{list.length}
         </span>
       </div>
       <div className="mt-2 grid grid-cols-[130px_1fr] gap-2">
@@ -724,7 +724,7 @@ function WardrobeWindow() {
           <p style={{ color: rcol(item) }}>{item.name}{isCollected(item.id) ? "" : " · not collected yet"}</p>
           <p className="text-muted">{tip(item)}</p>
           {shop && <p className="mt-1">Sold at the {shop}.</p>}
-          {srcs.length === 0 && !shop && <p className="mt-1 text-muted">No known source.</p>}
+          {srcs.length === 0 && !shop && <p className="mt-1 text-muted">No source.</p>}
           {srcs.slice(0, 6).map((s) => (
             <div key={s.monsterId} className="mt-1 flex items-center justify-between gap-2 rounded border border-line bg-surface-2 px-2 py-1">
               <span>
@@ -759,7 +759,7 @@ function BetaWindow() {
   ];
   return (
     <Window title="Job change (Beta)" onClose={() => togglePanel("beta")}>
-      <p className="text-xs text-muted">Beta test: switch to any job at any time. Stat points and skill points reset for free, and gear the new job cannot use goes back to your bag.</p>
+      <p className="text-xs text-muted">Free job change & resets (beta).</p>
       <div className="mt-2 max-h-72 overflow-auto">
         {groups.map((g) => (
           <div key={g.tier} className="mb-2">
@@ -858,7 +858,7 @@ function AutoWindow() {
         />
         Auto-equip the best gear for my job
       </label>
-      <p className="mt-2 text-[10.5px] text-muted">Auto Battle fights nearby monsters, drinks potions when low, and collects every drop on the map.</p>
+      <p className="mt-2 text-[10.5px] text-muted">Fights, heals and loots by itself.</p>
     </Window>
   );
 }
@@ -867,7 +867,7 @@ function NavWindow() {
   const here = world.mapId;
   return (
     <Window title="Auto Navigation" onClose={() => togglePanel("nav")}>
-      <p className="mb-2 text-xs text-muted">Pick a destination and your hero walks there through the gates by itself. Move manually to cancel.</p>
+      <p className="mb-2 text-xs text-muted">Pick a map to auto-walk there.</p>
       <div className="grid gap-1">
         {MAP_IDS.map((id) => (
           <button
@@ -969,9 +969,9 @@ function HotFace({ slot }: { slot: HotSlot }) {
 
 function Window({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
-    <section className="panel pointer-events-auto flex max-h-full w-[min(100%,24rem)] flex-col">
+    <section className="panel pointer-events-auto flex max-h-full w-[min(100%,21rem)] flex-col">
       <header className="flex items-center justify-between border-b border-line px-3 py-2">
-        <h2 className="font-display text-xl text-gold">{title}</h2>
+        <h2 className="font-display text-base text-gold">{title}</h2>
         <button type="button" aria-label="Close" onClick={onClose}>
           <X className="size-5" />
         </button>
