@@ -22,14 +22,14 @@
   --font-display: "Pixelify Sans", "Courier New", monospace;
   --font-sans: "Pixelify Sans", "Courier New", monospace;
   --radius-panel: 0;
-  /* UI boxes are 80% (root size), text is 150% net: 0.75rem * 1.875 = 1.5 * 0.75 after the 80% root */
-  --text-xs: 1.40625rem;
-  --text-sm: 1.640625rem;
-  --text-base: 1.875rem;
-  --text-lg: 2.109375rem;
-  --text-xl: 2.34375rem;
-  --text-2xl: 2.8125rem;
-  --text-3xl: 3.515625rem;
+  /* UI boxes are 80% (root size), text is 105% net (150% x 70%): 0.75rem * 1.875 = 1.5 * 0.75 after the 80% root */
+  --text-xs: 0.984375rem;
+  --text-sm: 1.14844rem;
+  --text-base: 1.3125rem;
+  --text-lg: 1.47656rem;
+  --text-xl: 1.64062rem;
+  --text-2xl: 1.96875rem;
+  --text-3xl: 2.46094rem;
 }
 
 @layer base {

@@ -526,7 +526,7 @@ export function GameApp() {
                 <button
                   key={i}
                   type="button"
-                  className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-md border border-line bg-surface text-[15px]"
+                  className="flex h-11 w-11 shrink-0 flex-col items-center justify-center rounded-md border border-line bg-surface text-[10.5px]"
                   onClick={() => pressHotbar(i)}
                   onContextMenu={(e) => {
                     e.preventDefault();
@@ -685,19 +685,19 @@ function WardrobeWindow() {
           <TryCanvas eq={eq} dir={dir} />
           <div className="flex justify-center gap-1">
             {([0, 1, 3, 2] as const).map((d, i) => (
-              <button key={d} type="button" className={`rounded border px-1 text-[15px] ${dir === d ? "border-gold text-gold" : "border-line"}`} onClick={() => setDir(d)}>
+              <button key={d} type="button" className={`rounded border px-1 text-[10.5px] ${dir === d ? "border-gold text-gold" : "border-line"}`} onClick={() => setDir(d)}>
                 {["Front", "Left", "Back", "Right"][i]}
               </button>
             ))}
           </div>
-          <button type="button" className="mt-1 w-full rounded border border-line px-1 py-0.5 text-[15px]" onClick={() => setTryOn({})}>
+          <button type="button" className="mt-1 w-full rounded border border-line px-1 py-0.5 text-[10.5px]" onClick={() => setTryOn({})}>
             Reset to my outfit
           </button>
         </div>
         <div>
           <div className="flex flex-wrap gap-1">
             {tabs.map((t) => (
-              <button key={t.slot} type="button" className={`rounded-md border px-1.5 py-0.5 text-[16.5px] ${curSlot === t.slot ? "border-gold text-gold" : "border-line"}`} onClick={() => { setSlot(t.slot); setSel(null); }}>
+              <button key={t.slot} type="button" className={`rounded-md border px-1.5 py-0.5 text-[11.5px] ${curSlot === t.slot ? "border-gold text-gold" : "border-line"}`} onClick={() => { setSlot(t.slot); setSel(null); }}>
                 {t.label}
               </button>
             ))}
@@ -713,7 +713,7 @@ function WardrobeWindow() {
                 onClick={() => pick(it.id)}
               >
                 <Icon id={it.id} />
-                {isCollected(it.id) && <span className="absolute right-0.5 top-0 text-[13.5px] text-gold">✓</span>}
+                {isCollected(it.id) && <span className="absolute right-0.5 top-0 text-[9.5px] text-gold">✓</span>}
               </button>
             ))}
           </div>
@@ -783,7 +783,7 @@ function BetaWindow() {
       <p className="mt-1 text-xs">
         Now: <span className="text-gold">{JOBS[p.job].name}</span> · {JOBS[p.job].blurb}
       </p>
-      <p className="mt-1 text-[15px] text-muted">Weapons: {JOBS[p.job].weapons.join(", ")}</p>
+      <p className="mt-1 text-[10.5px] text-muted">Weapons: {JOBS[p.job].weapons.join(", ")}</p>
       <div className="mt-3 flex flex-wrap gap-1">
         <button type="button" className="rounded-md bg-gold px-2 py-1 text-xs text-ink" onClick={() => resetStats()}>
           Reset stat points
@@ -839,7 +839,7 @@ function AutoWindow() {
                   }}
                 />
                 <span className="flex-1">{sk.name}</span>
-                <span className="text-[15px] text-muted">
+                <span className="text-[10.5px] text-muted">
                   {sk.sp} SP{buff ? " · buff" : ""}
                 </span>
               </label>
@@ -858,7 +858,7 @@ function AutoWindow() {
         />
         Auto-equip the best gear for my job
       </label>
-      <p className="mt-2 text-[15px] text-muted">Auto Battle fights nearby monsters, drinks potions when low, and collects every drop on the map.</p>
+      <p className="mt-2 text-[10.5px] text-muted">Auto Battle fights nearby monsters, drinks potions when low, and collects every drop on the map.</p>
     </Window>
   );
 }
@@ -908,11 +908,11 @@ function TargetCard() {
         <span className="truncate font-display text-lg leading-none text-fg">{st.name}</span>
         <span className={`text-xs ${tone}`}>Lv {st.level}</span>
       </div>
-      <p className="text-[15px] text-muted">{st.tag}</p>
+      <p className="text-[10.5px] text-muted">{st.tag}</p>
       <div className="bar bg-hp-deep mt-1">
         <div className="h-full bg-hp" style={{ width: `${Math.max(0, (m.hp / m.maxHp) * 100)}%` }} />
       </div>
-      <div className="mt-1 flex justify-between text-[15px] text-muted">
+      <div className="mt-1 flex justify-between text-[10.5px] text-muted">
         <span>
           {Math.ceil(m.hp)}/{m.maxHp} HP
         </span>
@@ -920,7 +920,7 @@ function TargetCard() {
           {st.exp} / {st.jexp} EXP
         </span>
       </div>
-      <p className="mt-1 truncate text-[15px] text-muted">
+      <p className="mt-1 truncate text-[10.5px] text-muted">
         Drops: {st.drops.filter((d) => d.rate >= 1 && ITEMS[d.id]).slice(0, 4).map((d) => `${ITEMS[d.id]!.name} ${d.rate}%`).join(", ")}
       </p>
     </div>
@@ -931,7 +931,7 @@ function Meter({ label, value, max, bar, track }: { label: string; value: number
   const pct = Math.max(0, Math.min(100, (value / Math.max(1, max)) * 100));
   return (
     <div className="pointer-events-none w-52">
-      <div className="flex justify-between text-[16.5px] text-fg">
+      <div className="flex justify-between text-[11.5px] text-fg">
         <span>{label}</span>
         <span>
           {Math.ceil(value)}/{Math.ceil(max)}
@@ -1029,7 +1029,7 @@ function StatusWindow() {
           <div key={row.key} className="flex items-center justify-between rounded-md bg-surface-2 px-2 py-1">
             <span className={`text-sm ${p[row.key] >= STAT_MAX ? "font-bold text-gold" : ""}`} style={p[row.key] >= STAT_MAX ? { textShadow: "0 0 6px #ffcf3a" } : undefined}>
               {row.label} {row.val}
-              {p[row.key] >= STAT_MAX && <span className="ml-1 text-[13.5px]">MAX</span>}
+              {p[row.key] >= STAT_MAX && <span className="ml-1 text-[9.5px]">MAX</span>}
             </span>
             <button type="button" className="h-11 w-11 rounded-md bg-gold text-lg text-ink" disabled={p.statPoints <= 0 || p[row.key] >= STAT_MAX} onClick={() => addStat(row.key)}>
               +
@@ -1129,7 +1129,7 @@ function Slot({ slot, id }: { slot: GearSlot; id: string | null }) {
   const item = id ? ITEMS[id] : undefined;
   return (
     <button type="button" title={item ? tip(item) : undefined} style={{ borderColor: rcol(item) }} className="rounded-md border border-line bg-surface-2 p-1 text-left" onClick={() => unequip(slot)}>
-      <span className="block text-[15px] text-muted">{SLOT_LABEL[slot]}</span>
+      <span className="block text-[10.5px] text-muted">{SLOT_LABEL[slot]}</span>
       {item ? <Icon id={item.id} /> : <span className="block h-8" />}
     </button>
   );
@@ -1182,7 +1182,7 @@ function CatTabs({ cat, setCat, counts }: { cat: Cat; setCat: (c: Cat) => void; 
         <button
           key={c.id}
           type="button"
-          className={`rounded-md border px-2 py-1 text-[16.5px] ${cat === c.id ? "border-gold bg-surface-2 text-gold" : "border-line"} ${counts[c.id] === 0 && c.id !== "all" ? "opacity-40" : ""}`}
+          className={`rounded-md border px-2 py-1 text-[11.5px] ${cat === c.id ? "border-gold bg-surface-2 text-gold" : "border-line"} ${counts[c.id] === 0 && c.id !== "all" ? "opacity-40" : ""}`}
           onClick={() => setCat(c.id)}
         >
           {c.label} {counts[c.id]}
@@ -1225,7 +1225,7 @@ function BagWindow() {
           return (
             <button key={`${stack.itemId}-${i}`} type="button" title={tip(item)} style={{ borderColor: rcol(item) }} className="rounded-md border border-line p-1 text-left" onClick={() => equipFromInventory(i)}>
               <Icon id={item.id} />
-              <span className="block truncate text-[15px]" style={{ color: rcol(item) }}>
+              <span className="block truncate text-[10.5px]" style={{ color: rcol(item) }}>
                 {item.name}
                 {stack.qty > 1 ? ` ×${stack.qty}` : ""}
               </span>
@@ -1249,7 +1249,7 @@ function BagWindow() {
           keep gear optimal during Auto Battle
         </label>
       </div>
-      <p className="mt-1 text-[15px]">
+      <p className="mt-1 text-[10.5px]">
         {(Object.keys(RARITY) as (keyof typeof RARITY)[]).map((k) => (
           <span key={k} className="mr-2" style={{ color: RARITY[k].color }}>
             ■ {RARITY[k].label}
@@ -1354,12 +1354,12 @@ function ShopWindow() {
     >
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs text-muted">{p.marks.toLocaleString()} zeny</p>
-        <label className="flex items-center gap-1 text-[16.5px] text-muted">
+        <label className="flex items-center gap-1 text-[11.5px] text-muted">
           <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />
           show items for other jobs
         </label>
       </div>
-      <p className="mt-1 text-[16.5px] text-gold">Showing gear for {JOBS[p.job].name}</p>
+      <p className="mt-1 text-[11.5px] text-gold">Showing gear for {JOBS[p.job].name}</p>
       <div className="mt-1">
         <CatTabs cat={buyCat} setCat={setBuyCat} counts={stockCounts} />
       </div>
@@ -1376,7 +1376,7 @@ function ShopWindow() {
                 <span className="block truncate text-sm" style={{ color: rcol(item) }} title={tip(item)}>
                   {item.name}
                 </span>
-                <span className="block truncate text-[15px] text-muted">{itemStats(item)}</span>
+                <span className="block truncate text-[10.5px] text-muted">{itemStats(item)}</span>
               </span>
               <button type="button" className="rounded-md bg-gold px-2 py-2 text-xs text-ink" onClick={() => tryBuy(id)}>
                 {cost}
