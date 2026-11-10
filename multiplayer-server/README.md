@@ -2,17 +2,17 @@
 
 Zero dependencies, one file. Needs Node 18+.
 
-    node server/server.mjs        # listens on PORT (default 8787)
+    node multiplayer-server/server.mjs        # listens on PORT (default 8787)
 
 Health check: `GET /health`.
 
 ## Deploy (free)
 
-**Render**: New → Web Service → this repo → Root directory `server`, Build command empty,
+**Render**: New → Web Service → this repo → Root directory `multiplayer-server`, Build command empty,
 Start command `node server.mjs`. Your address is `wss://<name>.onrender.com`.
 (Free instances sleep when idle; the first connect can take ~30 s.)
 
-**Fly.io / Railway**: same, start command `node server/server.mjs`, expose the PORT it gives you.
+**Fly.io / Railway**: same, start command `node multiplayer-server/server.mjs`, expose the PORT it gives you.
 
 ## Play together
 
