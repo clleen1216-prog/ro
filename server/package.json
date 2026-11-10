@@ -1,1 +1,10 @@
-{ "name": "ro-server", "private": true, "type": "module", "scripts": { "start": "node server.mjs" }, "engines": { "node": ">=18" } }
+{
+  "name": "ro-server",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node --check server.mjs",
+    "start": "node server.mjs"
+  },
+  "engines": { "node": ">=18" }
+}
