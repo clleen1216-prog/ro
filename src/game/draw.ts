@@ -1,4 +1,5 @@
 import { drawVfx } from "@/game/vfx";
+import { isPartyMate, net } from "@/game/net";
 import { rarityColor, RARITY, rarityOf } from "@/game/gear";
 import { buildingSprite, drawBlockActor, propSprite, type ActorParts } from "@/game/blockart";
 import { B, EPX, PX, blit, castShadow, hash, mk, setEntityPx, tileTexture } from "@/game/blocky";
@@ -962,6 +963,34 @@ export function renderFrame(canvas: HTMLCanvasElement, dt: number) {
         }
       },
     });
+  }
+
+  if (world.screen === "play" && net.active) {
+    for (const o of net.others.values()) {
+      if (!o.look) continue;
+      if (o.x < viewL - 60 || o.x > viewR + 60 || o.y < viewT - 80 || o.y > viewB + 60) continue;
+      drawers.push({
+        y: o.y,
+        draw: () => {
+          const lk = o.look!;
+          ctx.save();
+          if (o.down) ctx.globalAlpha = 0.5;
+          drawActor(ctx, o.x, o.y, o.dir, o.anim * (Math.PI / 2), o.amt, lk.style, lk.hair, lk.trim, lk.eq, o.sit || o.down, 0, 0, 0, o.atk, undefined, 0, lk.job);
+          ctx.restore();
+          const mate = isPartyMate(o.id);
+          label(ctx, `${mate ? "♥ " : ""}${o.name}`, o.x, o.y - 33 * EPX, mate ? "#9be28a" : "#bfe0ff");
+          if (mate && o.maxHp > 0) {
+            const w = 40;
+            const bx = Math.round(o.x - w / 2);
+            const by = Math.round(o.y - 33 * EPX - 14);
+            ctx.fillStyle = "#1a1a1a";
+            ctx.fillRect(bx - 1, by - 1, w + 2, 6);
+            ctx.fillStyle = "#d4534a";
+            ctx.fillRect(bx, by, Math.max(0, Math.round((w * o.hp) / o.maxHp)), 4);
+          }
+        },
+      });
+    }
   }
 
   drawers.sort((a, b) => a.y - b.y);

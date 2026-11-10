@@ -65,7 +65,7 @@ export const world = {
   dialog: null as Dialog | null,
   shop: null as null | "smith" | "outfit" | "supply",
   storageOpen: false,
-  panels: { status: false, equip: false, inv: false, skills: false, help: false, nav: false, auto: false, beta: false, wardrobe: false },
+  panels: { status: false, equip: false, inv: false, skills: false, help: false, nav: false, auto: false, beta: false, wardrobe: false, online: false },
   keys: new Set<string>(),
   qaKeys: null as Set<string> | null,
   touch: { x: 0, y: 0, attack: false },
@@ -300,7 +300,7 @@ export function spawnMonsters(mapId: MapId): Monster[] {
   return getMap(mapId).spawns.map((s, i) => {
     const st = MONSTERS[s.kind]!;
     return {
-      id: `${s.kind}-${i}-${uid()}`,
+      id: `${s.kind}-${i}`,
       kind: s.kind,
       x: s.x,
       y: s.y,
@@ -1030,7 +1030,7 @@ export function changeJob(job: JobId) {
   betaSetJob(job);
 }
 
-export function grantKill(kind: Monster["kind"], mx?: number, my?: number) {
+export function grantKill(kind: Monster["kind"], mx?: number, my?: number, opts: { mult?: number; loot?: boolean } = {}) {
   const p = world.player;
   if (!p) return;
   const st = MONSTERS[kind]!;
@@ -1039,11 +1039,12 @@ export function grantKill(kind: Monster["kind"], mx?: number, my?: number) {
   // Fighting far above your level pays less, like the classic level-gap penalty.
   const gap = p.baseLevel - st.level;
   const mult = gap > 8 ? Math.max(0.25, 1 - (gap - 8) * 0.08) : 1;
-  const exp = Math.max(1, Math.round(st.exp * mult));
-  const jexp = Math.max(1, Math.round(st.jexp * mult));
+  const share = opts.mult ?? 1;
+  const exp = Math.max(1, Math.round(st.exp * mult * share));
+  const jexp = Math.max(1, Math.round(st.jexp * mult * share));
   if (p.baseLevel < MAX_BASE) p.baseExp += exp;
   if (p.jobLevel < MAX_JOB) p.jobExp += jexp;
-  const loot = rollLoot(kind);
+  const loot = opts.loot === false ? { marks: 0, items: [], rareIds: [] as string[] } : rollLoot(kind);
   p.marks += loot.marks;
   float(p.x, p.y - 78, `+${exp} Base`, "#e4b15a");
   float(p.x - 6, p.y - 62, `+${jexp} Job`, "#8fd0e8");

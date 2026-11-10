@@ -1,4 +1,5 @@
 import { castVfx, stepVfx } from "@/game/vfx";
+import { followSnapshots, isPartyMate, net, netTick, send as netSend, sendHit } from "@/game/net";
 import { EPX } from "@/game/blocky";
 import { sfxBow, sfxCrit, sfxCast, sfxDown, sfxFoot, sfxHeal, sfxHit, sfxMiss, sfxPickup, sfxPortal, sfxSwing } from "@/game/audio";
 import { ITEMS, MONSTERS, SKILLS, TILE, getMap, isBlocked } from "@/game/content";
@@ -335,7 +336,7 @@ function hurtMonster(m: Monster, dmg: number, color: string) {
 
 const CRIT = "#ffcf3a";
 
-function hurtNow(m: Monster, dmg: number, color: string) {
+function hurtNow(m: Monster, dmg: number, color: string, by?: string) {
   const st = MONSTERS[m.kind]!;
   const p = world.player;
   if (!m.alive) return;
@@ -365,11 +366,21 @@ function hurtNow(m: Monster, dmg: number, color: string) {
     m.kbx = (dx / len) * k;
     m.kby = (dy / len) * k;
   }
+  if (net.active && !net.host) {
+    // the host owns monster life and death; we only show the hit and report it
+    if (!by) sendHit(m.id, dmg, color);
+    if (m.hp <= 0) m.hp = 1;
+    return;
+  }
   if (m.hp <= 0) {
     m.alive = false;
     m.dyingT = 0.6;
     m.deadUntil = (st.respawn ?? 10) * (st.boss || st.mini ? 1 : 0.6);
-    grantKill(m.kind, m.x, m.y);
+    if (net.active) {
+      const killer = by ?? net.id ?? "";
+      netSend({ t: "kill", kind: m.kind, x: Math.round(m.x), y: Math.round(m.y), killer });
+      onKill(killer, m.kind, m.x, m.y);
+    } else grantKill(m.kind, m.x, m.y);
     world.targetId = world.targetId === m.id ? null : world.targetId;
   }
 }
@@ -551,6 +562,7 @@ function castSkillInner(id: SkillId) {
     }
   }
   castVfx(id, sk, p, target ?? null, later);
+  if (net.active) netSend({ t: "fx", f: { id, x: Math.round(p.x), y: Math.round(p.y), tx: target ? Math.round(target.x) : undefined, ty: target ? Math.round(target.y) : undefined } });
   if (sk.fx && sk.fx.t !== "passive") {
     if (!runFx(sk, lv, d, target)) p.sp += cost;
   } else if (id === "firstAid") healSelf(8 + p.baseLevel * 3);
@@ -901,10 +913,62 @@ function separateMonsters() {
   }
 }
 
+/** a monster's blow lands on this hero: armor and flee apply here, on the victim's own device */
+function strikePlayer(rawAtk: number, level: number) {
+  const p = world.player;
+  if (!p) return;
+  const d = derive(p);
+  const raw = (rawAtk - d.def * 0.55);
+  const chance = Math.max(0.3, Math.min(0.95, (50 + level * 4) / (50 + level * 4 + d.flee)));
+  if (Math.random() > chance) float(p.x, p.y - 48, "Miss", "#b7ad9c");
+  else hurtPlayer(raw);
+}
+
+/** a monster died: the killer gets everything, party mates on the map get shared EXP */
+function onKill(killer: string, kind: string, x: number, y: number) {
+  if (!killer || killer === net.id) grantKill(kind, x, y);
+  else if (isPartyMate(killer)) grantKill(kind, x, y, { mult: 0.8, loot: false });
+}
+
+net.hooks.hit = (from, mid, dmg, col) => {
+  const m = monsterById(mid);
+  if (m) hurtNow(m, dmg, col, from);
+};
+net.hooks.mhit = (raw, lvl) => strikePlayer(raw, lvl);
+net.hooks.kill = onKill;
+net.hooks.maxHp = () => (world.player ? derive(world.player).maxHp : 1);
+net.hooks.maxSp = () => (world.player ? derive(world.player).maxSp : 1);
+net.hooks.fx = (f) => {
+  const sk = SKILLS[f.id as SkillId];
+  if (sk) castVfx(f.id, sk, { x: f.x, y: f.y }, f.tx != null && f.ty != null ? { x: f.tx, y: f.ty } : null, later);
+};
+
+type Tgt = { x: number; y: number; hidden: boolean; down: boolean; id: string | null };
+
+/** nearest player a monster can see: this hero or, when hosting, any other hero on the map */
+function chooseTarget(m: Monster, p: NonNullable<typeof world.player>): Tgt {
+  const me: Tgt = { x: p.x, y: p.y, hidden: p.downFor > 0 || p.feign > 0, down: p.downFor > 0, id: null };
+  if (!net.active || !net.host) return me;
+  let best = me.hidden ? null : me;
+  let bd = best ? dist(m.x, m.y, me.x, me.y) : Infinity;
+  for (const o of net.others.values()) {
+    if (o.down) continue;
+    const d = dist(m.x, m.y, o.x, o.y);
+    if (d < bd) {
+      bd = d;
+      best = { x: o.x, y: o.y, hidden: false, down: false, id: o.id };
+    }
+  }
+  return best ?? me;
+}
+
 function updateMonsters(dt: number) {
   const p = world.player;
   if (!p) return;
-  const hidden = p.downFor > 0 || p.feign > 0;
+  if (net.active && !net.host) {
+    followSnapshots(dt);
+    return;
+  }
   for (const m of world.monsters) {
     m.hurt = Math.max(0, m.hurt - dt);
     if (m.alive && (m.poison ?? 0) > 0) {
@@ -954,15 +1018,17 @@ function updateMonsters(dt: number) {
       continue;
     }
     const st = MONSTERS[m.kind]!;
-    const dd = dist(m.x, m.y, p.x, p.y);
+    const tg = chooseTarget(m, p);
+    const hidden = tg.hidden;
+    const dd = dist(m.x, m.y, tg.x, tg.y);
     const home = dist(m.x, m.y, m.homeX, m.homeY);
     if (hidden) m.aggro = false;
     if (home > 320) m.aggro = false;
     if (!hidden && !m.aggro && st.behavior === "aggressive" && dd < st.aggro) m.aggro = true;
 
     const reach = st.boss ? 46 : 36;
-    if (!hidden && m.aggro && st.behavior !== "skittish" && dd < reach && p.downFor <= 0) {
-      m.dir = face(p.x - m.x, p.y - m.y);
+    if (!hidden && m.aggro && st.behavior !== "skittish" && dd < reach && !tg.down) {
+      m.dir = face(tg.x - m.x, tg.y - m.y);
       m.moving = false;
       m.ease = Math.max(0, m.ease - dt * 10);
       m.anim += dt * 5;
@@ -972,12 +1038,9 @@ function updateMonsters(dt: number) {
         if (m.windup <= 0) {
           m.lunge = 0.2;
           m.cd = st.boss ? 1.3 : 1.15;
-          if (dist(m.x, m.y, p.x, p.y) < reach + 14) {
-            const d = derive(p);
-            const raw = (st.atk - d.def * 0.55) * (0.88 + Math.random() * 0.24);
-            const chance = Math.max(0.3, Math.min(0.95, (50 + st.level * 4) / (50 + st.level * 4 + d.flee)));
-            if (Math.random() > chance) float(p.x, p.y - 48, "Miss", "#b7ad9c");
-            else hurtPlayer(raw);
+          if (dist(m.x, m.y, tg.x, tg.y) < reach + 14) {
+            if (tg.id) netSend({ t: "mhit", to: tg.id, raw: Math.round(st.atk * (0.88 + Math.random() * 0.24)), lvl: st.level });
+            else strikePlayer(st.atk * (0.88 + Math.random() * 0.24), st.level);
           }
         }
       } else if (m.cd <= 0) {
@@ -995,12 +1058,12 @@ function updateMonsters(dt: number) {
       continue;
     }
     if (!hidden && m.aggro && st.behavior !== "skittish") {
-      tx = p.x;
-      ty = p.y;
+      tx = tg.x;
+      ty = tg.y;
       speed = st.speed;
     } else if (!hidden && st.behavior === "skittish" && dd < st.aggro + 24) {
-      const dx = m.x - p.x;
-      const dy = m.y - p.y;
+      const dx = m.x - tg.x;
+      const dy = m.y - tg.y;
       const len = Math.hypot(dx, dy) || 1;
       tx = m.x + (dx / len) * 96;
       ty = m.y + (dy / len) * 96;
@@ -1288,6 +1351,7 @@ export function step(dt0: number) {
     if (world.bossBanner.t > 3.4) world.bossBanner = null;
   }
   stepVfx(dt0);
+  netTick(dt0);
   for (const c of world.crits) c.t += dt0;
   world.crits = world.crits.filter((c) => c.t < 0.45);
   runLater(dt);

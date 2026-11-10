@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { Backpack, BookOpen, Crown, CircleHelp, Compass, Shield, SlidersHorizontal, Sparkles, Swords, UserRound, Volume2, VolumeX, X } from "lucide-react";
+import { Backpack, BookOpen, Crown, Users, CircleHelp, Compass, Shield, SlidersHorizontal, Sparkles, Swords, UserRound, Volume2, VolumeX, X } from "lucide-react";
 import { loadAll } from "@/game/assets";
 import { setMusicOn, setTrack, sfxClick, tick, trackTitle, unlock } from "@/game/audio";
 import {
@@ -29,6 +29,7 @@ import {
   sellPrice,
 } from "@/game/content";
 import { RARITY, rarityOf, weaponNote } from "@/game/gear";
+import { acceptInvite, connect, declineInvite, disconnect, invitePlayer, kickMember, leaveParty, net } from "@/game/net";
 import { dropSources, isCollected, itemsForSlot, shopSource, type CodexSlot } from "@/game/codex";
 import { drawItemIcon, drawPreview, renderFrame } from "@/game/draw";
 import { cancelTravel, castSkill, holdMove, installProbe, pickAt, pointerDown, setAutoBattle, step, travelTo } from "@/game/sim";
@@ -470,6 +471,9 @@ export function GameApp() {
               <IconBtn label="Job change (Beta)" onClick={() => togglePanel("beta")} active={world.panels.beta}>
                 <Crown />
               </IconBtn>
+              <IconBtn label={net.status === "on" ? "Online · party" : "Online · party (offline)"} onClick={() => togglePanel("online")} active={world.panels.online}>
+                <Users />
+              </IconBtn>
               <IconBtn label="Fitting room & hat book (W)" onClick={() => togglePanel("wardrobe")} active={world.panels.wardrobe}>
                 <BookOpen />
               </IconBtn>
@@ -550,6 +554,8 @@ export function GameApp() {
             {world.panels.auto && <AutoWindow />}
             {world.panels.beta && <BetaWindow />}
             {world.panels.wardrobe && <WardrobeWindow />}
+            {world.panels.online && <OnlineWindow />}
+            <PartyHud />
             {world.shop && <ShopWindow />}
             {world.storageOpen && <StorageWindow />}
           </div>
@@ -744,6 +750,103 @@ function WardrobeWindow() {
             </div>
           ))}
         </div>
+      )}
+    </Window>
+  );
+}
+
+function Bar({ v, max, color }: { v: number; max: number; color: string }) {
+  return (
+    <div className="h-1.5 w-full bg-black/60">
+      <div className="h-full" style={{ width: `${Math.max(0, Math.min(100, (v / Math.max(1, max)) * 100))}%`, background: color }} />
+    </div>
+  );
+}
+
+function PartyHud() {
+  const inv = net.invite;
+  const party = net.party;
+  return (
+    <>
+      {inv && (
+        <div className="pointer-events-auto absolute left-1/2 top-3 z-40 -translate-x-1/2 rounded-md border border-gold bg-surface px-3 py-2 text-sm shadow-lg">
+          <span className="text-gold">{inv.name}</span> invites you to a party
+          <button type="button" className="ml-2 rounded border border-gold px-2 text-gold" onClick={acceptInvite}>Join</button>
+          <button type="button" className="ml-1 rounded border border-line px-2" onClick={declineInvite}>No</button>
+        </div>
+      )}
+      {party && (
+        <div className="pointer-events-none absolute left-2 top-28 z-30 w-36 space-y-1 text-xs">
+          {party.members.map((m) => (
+            <div key={m.id} className="rounded bg-black/55 px-1.5 py-1">
+              <div className="flex justify-between">
+                <span className={m.id === net.id ? "text-gold" : "text-[#9be28a]"}>{m.id === party.leader ? "♛ " : ""}{m.name}</span>
+                <span className="text-muted">Lv{m.lv}</span>
+              </div>
+              <Bar v={m.hp} max={m.maxHp} color="#d4534a" />
+              <Bar v={m.sp} max={m.maxSp} color="#4a8ad4" />
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+function OnlineWindow() {
+  const [url, setUrl] = useState(net.url);
+  const on = net.status === "on";
+  const party = net.party;
+  const leader = party?.leader === net.id;
+  const others = [...net.others.values()];
+  return (
+    <Window title="Online party" onClose={() => togglePanel("online")}>
+      <div className="flex gap-1 text-xs">
+        <input
+          className="min-w-0 flex-1 rounded border border-line bg-surface-2 px-2 py-1"
+          placeholder="wss://your-server.example"
+          value={url}
+          disabled={on}
+          onChange={(e) => setUrl(e.target.value)}
+        />
+        {on ? (
+          <button type="button" className="rounded border border-line px-2" onClick={() => disconnect()}>Leave</button>
+        ) : (
+          <button type="button" className="rounded border border-gold px-2 text-gold" onClick={() => connect(url)}>Connect</button>
+        )}
+      </div>
+      <p className="mt-1 text-xs text-muted">{net.status === "on" ? `Online${net.host ? " · you run this map's monsters" : ""}` : net.note || "Offline"}</p>
+      {on && (
+        <>
+          <p className="mt-2 text-xs text-gold">Players here ({others.length})</p>
+          <div className="space-y-1">
+            {others.length === 0 && <p className="text-xs text-muted">Nobody else on this map.</p>}
+            {others.map((o) => {
+              const mate = party?.members.some((m) => m.id === o.id);
+              return (
+                <div key={o.id} className="flex items-center justify-between rounded border border-line bg-surface-2 px-2 py-1 text-xs">
+                  <span>{o.name}{o.look ? ` · Lv${o.look.lv}` : ""}</span>
+                  {mate ? <span className="text-[#9be28a]">in party</span> : (!party || leader) && <button type="button" className="rounded border border-gold px-2 text-gold" onClick={() => invitePlayer(o.id)}>Invite</button>}
+                </div>
+              );
+            })}
+          </div>
+          <p className="mt-2 text-xs text-gold">Party{party ? ` (${party.members.length}/6)` : ""}</p>
+          {party ? (
+            <div className="space-y-1">
+              {party.members.map((m) => (
+                <div key={m.id} className="flex items-center justify-between rounded border border-line bg-surface-2 px-2 py-1 text-xs">
+                  <span>{m.id === party.leader ? "♛ " : ""}{m.name} · Lv{m.lv}</span>
+                  {leader && m.id !== net.id && <button type="button" className="rounded border border-line px-2" onClick={() => kickMember(m.id)}>Kick</button>}
+                </div>
+              ))}
+              <button type="button" className="w-full rounded border border-line px-2 py-1 text-xs" onClick={leaveParty}>Leave party</button>
+              <p className="text-xs text-muted">Kills: killer gets drops, mates on the map get 80% EXP.</p>
+            </div>
+          ) : (
+            <p className="text-xs text-muted">Invite a player to start one.</p>
+          )}
+        </>
       )}
     </Window>
   );
