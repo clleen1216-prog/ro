@@ -1,4 +1,5 @@
 // Abnormal states on the hero: stun, sleep, freeze, poison, slow, curse, silence.
+import { cardMods } from "@/game/cardfx";
 import { world } from "@/game/world";
 
 export type StatusKind = "stun" | "sleep" | "freeze" | "poison" | "slow" | "curse" | "silence";
@@ -21,9 +22,12 @@ export const isSilenced = () => world.status.silence > 0 || isCC();
 /** apply a state; hard crowd control grants a short immunity afterwards so it cannot chain-lock */
 export function applyStatus(kind: StatusKind, secs: number, power = 1): boolean {
   const s = world.status;
-  if (CC.includes(kind)) {
-    if (s.immune > 0) return false;
-    // a stronger Vit/Int-less hero is not special-cased; keep it simple
+  if (CC.includes(kind) && s.immune > 0) return false;
+  const p = world.player;
+  if (p) {
+    const m = cardMods(p);
+    const res = { stun: m.rStun, sleep: m.rSleep, poison: m.rPoison, curse: m.rCurse, silence: m.rSilence, freeze: m.rFreeze, slow: m.rSlow }[kind] ?? 0;
+    if (res > 0 && Math.random() * 100 < res) return false;
   }
   s[kind] = Math.max(s[kind], secs);
   if (kind === "poison") {

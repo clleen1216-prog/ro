@@ -22,8 +22,8 @@ const POISON = "#9a5ad0";
 export const NEW_SKILLS = defs({
   // ───────────── Acolyte ─────────────
   heal: ["Heal", "acolyte", 13, 10, "self", "Restore HP by a large amount. Scales with INT.", { t: "heal", heal: 30, hr: 28 }],
-  blessing: ["Blessing", "acolyte", 24, 5, "self", "ATK and HIT rise for a while.", { t: "buff", buff: [{ stat: "atk", a: 4, ar: 3, dur: 60 }, { stat: "hit", a: 6, ar: 4, dur: 60 }] }],
-  incAgi: ["Increase AGI", "acolyte", 18, 5, "self", "FLEE and attack speed rise.", { t: "buff", buff: [{ stat: "flee", a: 6, ar: 5, dur: 50 }, { stat: "aspd", a: 4, ar: 3, dur: 50 }] }],
+  blessing: ["Blessing", "acolyte", 24, 5, "self", "ATK and HIT rise for a while.", { t: "buff", buff: [{ stat: "atk", a: 4, ar: 3, dur: 60 }, { stat: "hit", a: 6, ar: 4, dur: 60 }, { stat: "str", a: 2, ar: 1, dur: 60 }, { stat: "int", a: 2, ar: 1, dur: 60 }, { stat: "dex", a: 2, ar: 1, dur: 60 }] }],
+  incAgi: ["Increase AGI", "acolyte", 18, 5, "self", "FLEE and attack speed rise.", { t: "buff", buff: [{ stat: "flee", a: 6, ar: 5, dur: 50 }, { stat: "aspd", a: 4, ar: 3, dur: 50 }, { stat: "agi", a: 3, ar: 1.5, dur: 50 }] }],
   holyLight: ["Holy Light", "acolyte", 15, 1, "enemy", "A ray of holy magic that always hits.", { t: "hit", m: 1.7, mg: true, rng: true, col: HOLY, shot: "bolt" }],
   divineProt: ["Divine Protection", "acolyte", 0, 10, "passive", "Passive. DEF rises with rank.", { t: "passive", pass: { def: 2 } }],
 
@@ -37,7 +37,7 @@ export const NEW_SKILLS = defs({
   // ───────────── Merchant ─────────────
   mammonite: ["Mammonite", "merchant", 10, 10, "enemy", "A heavy blow powered by coin. Costs 100 zeny per cast.", { t: "hit", m: 1.6, r: 0.2, col: "#e4b15a", zeny: 100 }],
   cartRev: ["Cart Revolution", "merchant", 12, 10, "area", "Swing the cart: damages and shoves everything around you.", { t: "area", m: 1.2, r: 0.13, rad: 80, rr: 3, col: "#c9a43a", kb: true, self: true }],
-  loudExc: ["Loud Exclamation", "merchant", 8, 1, "self", "A thunderous shout. ATK jumps for a minute.", { t: "buff", buff: [{ stat: "atk", a: 10, ar: 0, dur: 60 }] }],
+  loudExc: ["Loud Exclamation", "merchant", 8, 1, "self", "A thunderous shout. ATK jumps for a minute.", { t: "buff", buff: [{ stat: "atk", a: 10, ar: 0, dur: 60 }, { stat: "str", a: 4, ar: 0, dur: 60 }] }],
   discount: ["Discount", "merchant", 0, 10, "passive", "Passive. Shop prices drop by 2.4% per rank.", { t: "passive", pass: { disc: 2.4 } }],
 
   // ───────────── Knight ─────────────

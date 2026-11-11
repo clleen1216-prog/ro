@@ -181,9 +181,10 @@ export type IconKind =
   | "wingfly"
   | "mucus";
 export type WeaponKind = "dagger" | "sword" | "staff" | "bow" | "mace" | "spear" | "axe" | "katar" | "knuckle" | "harp";
-export type BuffStat = "atk" | "def" | "flee" | "hit" | "aspd" | "crit" | "matk";
+export type BuffStat = "atk" | "def" | "flee" | "hit" | "aspd" | "crit" | "matk" | "str" | "agi" | "vit" | "int" | "dex" | "luk";
 
-export type Stack = { itemId: string; qty: number };
+/** `cards` are the cards socketed into this piece of gear */
+export type Stack = { itemId: string; qty: number; cards?: string[] };
 export type HotSlot = { kind: "skill"; id: SkillId } | { kind: "item"; id: string };
 
 export type Buff = { stat: BuffStat; amount: number; until: number };
@@ -191,6 +192,10 @@ export type Buff = { stat: BuffStat; amount: number; until: number };
 export type Player = {
   /** item ids the hero has ever owned (hat book) */
   seen?: string[];
+  /** cards socketed into worn gear, by slot */
+  eqCards?: Partial<Record<GearSlot, string[]>>;
+  /** item ids that auto-sell and Sell junk never touch */
+  locked?: string[];
   name: string;
   x: number;
   y: number;

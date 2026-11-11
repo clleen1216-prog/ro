@@ -1,5 +1,6 @@
 import { sfxCoin, sfxEquip, sfxHeal, sfxLevel } from "@/game/audio";
-import { WEAPON_TYPES, gearScore, isRareOrBetter } from "@/game/gear";
+import { cardDef, cardFits, cardMods, socketSlots } from "@/game/cardfx";
+import { RARITY, WEAPON_TYPES, gearScore, isRareOrBetter, rarityOf } from "@/game/gear";
 import {
   BASE_STAT,
   ITEMS,
@@ -98,7 +99,7 @@ export const world = {
   /** auto-battle / auto-navigation */
   swingMax: 0.4,
   shots: [] as { kind: string; x: number; y: number; tx: number; ty: number; t: number; dur: number; color: string }[],
-  auto: { battle: false, travel: null as MapId | null, skillT: 0, pathT: 0, note: "", equipT: 0, skills: {} as Partial<Record<SkillId, boolean>>, autoEquip: true },
+  auto: { battle: false, travel: null as MapId | null, skillT: 0, pathT: 0, note: "", equipT: 0, skills: {} as Partial<Record<SkillId, boolean>>, autoEquip: true, sell: { on: false, loot: true, gear: true, cards: false, maxRank: 0, t: 0, sold: 0, earned: 0, last: "" } },
 };
 
 let rev = 0;
@@ -162,6 +163,7 @@ export function derive(p: Player) {
   let luk = 0;
   let range = 42;
   let wKind: WeaponKind | null = null;
+  const cm = cardMods(p);
   for (const slot of Object.keys(p.eq) as GearSlot[]) {
     const id = p.eq[slot];
     if (!id) continue;
@@ -203,6 +205,7 @@ export function derive(p: Player) {
   let bAspd = 0;
   let bCrit = 0;
   let bMatk = 0;
+  const bStat = { str: 0, agi: 0, vit: 0, int: 0, dex: 0, luk: 0 };
   for (const b of p.buffs) {
     if (b.until <= now) continue;
     if (b.stat === "atk") bAtk += b.amount;
@@ -212,13 +215,29 @@ export function derive(p: Player) {
     if (b.stat === "aspd") bAspd += b.amount;
     if (b.stat === "crit") bCrit += b.amount;
     if (b.stat === "matk") bMatk += b.amount;
+    if (b.stat === "str") bStat.str += b.amount;
+    if (b.stat === "agi") bStat.agi += b.amount;
+    if (b.stat === "vit") bStat.vit += b.amount;
+    if (b.stat === "int") bStat.int += b.amount;
+    if (b.stat === "dex") bStat.dex += b.amount;
+    if (b.stat === "luk") bStat.luk += b.amount;
   }
-  const S = p.str + str;
-  const A = p.agi + agi;
-  const V = p.vit + vit;
-  const I = p.int + intel;
-  const D = p.dex + dex;
-  const L = p.luk + luk;
+  def += cm.def ?? 0;
+  mdef += cm.mdef ?? 0;
+  bAtk += cm.atk ?? 0;
+  bMatk += cm.matk ?? 0;
+  bHit += cm.hit ?? 0;
+  bFlee += cm.flee ?? 0;
+  bCrit += cm.crit ?? 0;
+  bAspd += cm.aspdPct ?? 0;
+  const eqStat = { str, agi, vit, int: intel, dex, luk };
+  const cardStat = { str: cm.str ?? 0, agi: cm.agi ?? 0, vit: cm.vit ?? 0, int: cm.int ?? 0, dex: cm.dex ?? 0, luk: cm.luk ?? 0 };
+  const S = p.str + str + cardStat.str + bStat.str;
+  const A = p.agi + agi + cardStat.agi + bStat.agi;
+  const V = p.vit + vit + cardStat.vit + bStat.vit;
+  const I = p.int + intel + cardStat.int + bStat.int;
+  const D = p.dex + dex + cardStat.dex + bStat.dex;
+  const L = p.luk + luk + cardStat.luk + bStat.luk;
   const slowM = world.status.slow > 0 ? 0.55 : 1;
   const curseM = world.status.curse > 0 ? 0.7 : 1;
   const out = {
@@ -228,11 +247,11 @@ export function derive(p: Player) {
     int: I,
     dex: D,
     luk: L,
-    maxHp: Math.round((48 + p.baseLevel * 12 + V * 8) * jd.hp * (1 + pa.hp / 100)),
-    maxSp: Math.round((20 + p.baseLevel * 4 + I * 5) * jd.sp * (1 + pa.sp / 100)),
+    maxHp: Math.round(((48 + p.baseLevel * 12 + V * 8) * jd.hp * (1 + pa.hp / 100) + (cm.hp ?? 0)) * (1 + (cm.hpPct ?? 0) / 100)),
+    maxSp: Math.round(((20 + p.baseLevel * 4 + I * 5) * jd.sp * (1 + pa.sp / 100) + (cm.sp ?? 0)) * (1 + (cm.spPct ?? 0) / 100)),
     disc: pa.disc,
-    atk: Math.round((5 + S * 2 + p.baseLevel + atk + bAtk + pa.atk + (wKind === "bow" ? Math.floor(D * 0.8) : 0)) * (wt ? wt.atk : 1) * (wKind === "staff" ? 1 : 1)),
-    matk: Math.round((3 + I * 2 + matk + bMatk + pa.matk) * (wKind === "staff" ? 1.12 : wKind === "harp" ? 1.08 : 1)),
+    atk: Math.round((5 + S * 2 + p.baseLevel + atk + bAtk + pa.atk + (wKind === "bow" ? Math.floor(D * 0.8) : 0)) * (wt ? wt.atk : 1) * (1 + (cm.atkPct ?? 0) / 100)),
+    matk: Math.round((3 + I * 2 + matk + bMatk + pa.matk) * (wKind === "staff" ? 1.12 : wKind === "harp" ? 1.08 : 1) * (1 + (cm.matkPct ?? 0) / 100)),
     wKind,
     def: Math.floor(V / 2) + def + bDef + pa.def,
     mdef,
@@ -244,7 +263,9 @@ export function derive(p: Player) {
     hpRegen: ((48 + p.baseLevel * 12 + V * 8) * jd.hp * (1 + pa.hp / 100) * 0.012 * (1 + V / 60) * jobRegen(p.job)[0]),
     spRegen: ((20 + p.baseLevel * 4 + I * 5) * jd.sp * (1 + pa.sp / 100) * 0.016 * (1 + I / 60) * jobRegen(p.job)[1]),
     aspd: Math.max(ASPD_MIN, (1.28 - A * 0.018 - D * 0.006) * (wt ? wt.speed : 1) * (1 - Math.min(60, pa.aspd + bAspd) / 100)),
-    speed: (148 + A * 1.7) * slowM,
+    extra: { equip: eqStat, cards: cardStat, buff: bStat },
+    mods: cm,
+    speed: (148 + A * 1.7) * slowM * (1 + (cm.speedPct ?? 0) / 100),
     range,
   };
   if (curseM < 1) {
@@ -512,7 +533,7 @@ export function burst(x: number, y: number, color: string) {
 export const INV_CAP = Number.MAX_SAFE_INTEGER;
 const INV_MAX = INV_CAP;
 
-export function addItem(itemId: string, qty: number) {
+export function addItem(itemId: string, qty: number, cards?: string[]) {
   const p = world.player;
   if (!p) return false;
   const it = ITEMS[itemId];
@@ -527,7 +548,7 @@ export function addItem(itemId: string, qty: number) {
     }
   }
   if (p.inv.length >= INV_MAX) return false;
-  p.inv.push({ itemId, qty });
+  p.inv.push(cards && cards.length ? { itemId, qty, cards: [...cards] } : { itemId, qty });
   return true;
 }
 
@@ -570,10 +591,13 @@ export function equipFromInventory(index: number) {
     slot = it.slot;
   }
   const prev = p.eq[slot];
+  const prevCards = p.eqCards?.[slot];
+  const newCards = stack.cards;
   p.eq[slot] = stack.itemId;
+  setWornCards(slot, newCards);
   stack.qty -= 1;
   if (stack.qty <= 0) p.inv.splice(index, 1);
-  if (prev) addItem(prev, 1);
+  if (prev) addItem(prev, 1, prevCards);
   sfxEquip();
   log(`Equipped ${it.name} in ${SLOT_NAME[slot]}.`);
   const d = derive(p);
@@ -601,16 +625,122 @@ export function unequip(slot: GearSlot) {
   if (!p) return;
   const id = p.eq[slot];
   if (!id) return;
-  if (!addItem(id, 1)) {
+  if (!addItem(id, 1, p.eqCards?.[slot])) {
     log("The bag is full.");
     bump();
     return;
   }
   p.eq[slot] = null;
+  setWornCards(slot, undefined);
   sfxEquip();
   persist();
   bump();
 }
+
+/** worn-gear card bookkeeping */
+function setWornCards(slot: GearSlot, cards: string[] | undefined) {
+  const p = world.player;
+  if (!p) return;
+  if (!p.eqCards) p.eqCards = {};
+  if (cards && cards.length) p.eqCards[slot] = [...cards];
+  else delete p.eqCards[slot];
+}
+
+export type SocketTarget = { kind: "inv"; index: number } | { kind: "eq"; slot: GearSlot };
+
+function targetInfo(t: SocketTarget): { itemId: string; cards: string[]; set: (c: string[]) => void } | null {
+  const p = world.player;
+  if (!p) return null;
+  if (t.kind === "inv") {
+    const st = p.inv[t.index];
+    if (!st) return null;
+    return {
+      itemId: st.itemId,
+      cards: st.cards ?? [],
+      set: (c) => {
+        if (c.length) st.cards = c;
+        else delete st.cards;
+      },
+    };
+  }
+  const id = p.eq[t.slot];
+  if (!id) return null;
+  return { itemId: id, cards: p.eqCards?.[t.slot] ?? [], set: (c) => setWornCards(t.slot, c) };
+}
+
+export function cardsOn(t: SocketTarget): string[] {
+  return targetInfo(t)?.cards ?? [];
+}
+
+/** put the card at bag index `cardIndex` into a free socket of the target gear */
+export function socketCard(t: SocketTarget, cardIndex: number): boolean {
+  const p = world.player;
+  if (!p) return false;
+  const info = targetInfo(t);
+  const cs = p.inv[cardIndex];
+  if (!info || !cs || cs.qty < 1) return false;
+  const it = ITEMS[info.itemId];
+  if (!cardDef(cs.itemId)) {
+    log("That is not a card.");
+    bump();
+    return false;
+  }
+  if (!cardFits(cs.itemId, it)) {
+    log(`${ITEMS[cs.itemId]?.name ?? "That card"} does not fit ${it?.name ?? "that"}.`);
+    bump();
+    return false;
+  }
+  if (info.cards.length >= socketSlots(it)) {
+    log(`${it?.name} has no free socket.`);
+    bump();
+    return false;
+  }
+  const cardId = cs.itemId;
+  info.set([...info.cards, cardId]);
+  cs.qty -= 1;
+  if (cs.qty <= 0) p.inv.splice(cardIndex, 1);
+  sfxEquip();
+  log(`Socketed ${ITEMS[cardId]?.name} into ${it?.name}.`);
+  const d = derive(p);
+  p.hp = Math.min(p.hp, d.maxHp);
+  p.sp = Math.min(p.sp, d.maxSp);
+  persist();
+  bump();
+  return true;
+}
+
+/** take a card back out (free in the beta) */
+export function removeCard(t: SocketTarget, socket: number) {
+  const p = world.player;
+  const info = targetInfo(t);
+  if (!p || !info) return;
+  const cardId = info.cards[socket];
+  if (!cardId) return;
+  const rest = info.cards.filter((_, i) => i !== socket);
+  info.set(rest);
+  if (!addItem(cardId, 1)) give(cardId, 1);
+  sfxEquip();
+  log(`Removed ${ITEMS[cardId]?.name}.`);
+  const d = derive(p);
+  p.hp = Math.min(p.hp, d.maxHp);
+  p.sp = Math.min(p.sp, d.maxSp);
+  persist();
+  bump();
+}
+
+export function toggleLock(itemId: string) {
+  const p = world.player;
+  if (!p) return;
+  if (!p.locked) p.locked = [];
+  const i = p.locked.indexOf(itemId);
+  if (i >= 0) p.locked.splice(i, 1);
+  else p.locked.push(itemId);
+  persist();
+  bump();
+}
+
+export const isLocked = (itemId: string) => !!world.player?.locked?.includes(itemId);
+
 
 export function useStack(index: number) {
   const p = world.player;
@@ -790,10 +920,13 @@ export function autoEquip(quiet = false) {
       const now = cur ? gearScore(cur, p.job) : -Infinity;
       if (gearScore(it, p.job) > now + 0.5) {
         const id = p.inv[i]!.itemId;
+        const newCards = p.inv[i]!.cards;
+        const curCards = p.eqCards?.[slot];
         p.inv[i]!.qty -= 1;
         if (p.inv[i]!.qty <= 0) p.inv.splice(i, 1);
         p.eq[slot] = id;
-        if (cur) addItem(cur.id, 1);
+        setWornCards(slot, newCards);
+        if (cur) addItem(cur.id, 1, curCards);
         changed++;
         swapped = true;
         if (!quiet) log(`Auto-equipped ${it.name}.`);
@@ -821,9 +954,66 @@ export function junkIndexes() {
   const out: number[] = [];
   p.inv.forEach((st, i) => {
     const it = ITEMS[st.itemId];
-    if (it && it.slot === "etc" && !isRareOrBetter(it)) out.push(i);
+    if (it && it.slot === "etc" && !isRareOrBetter(it) && !cardDef(st.itemId) && !p.locked?.includes(st.itemId)) out.push(i);
   });
   return out;
+}
+
+/** bag indexes the Auto Sell options would sell right now */
+export function autoSellIndexes(): number[] {
+  const p = world.player;
+  if (!p) return [];
+  const o = world.auto.sell;
+  const out: number[] = [];
+  p.inv.forEach((st, i) => {
+    const it = ITEMS[st.itemId];
+    if (!it || it.slot === "use" || p.locked?.includes(st.itemId)) return;
+    const rank = RARITY[rarityOf(it)].rank;
+    if (rank > o.maxRank) return;
+    if (cardDef(st.itemId)) {
+      if (o.cards) out.push(i);
+      return;
+    }
+    if (it.slot === "etc") {
+      if (o.loot) out.push(i);
+      return;
+    }
+    if (!o.gear || st.cards?.length) return;
+    if (canEquip(p.job, it)) {
+      const slot: GearSlot = it.slot === "acc" ? ((p.eq.acc1 ? gearScore(ITEMS[p.eq.acc1]!, p.job) : -1) <= (p.eq.acc2 ? gearScore(ITEMS[p.eq.acc2]!, p.job) : -1) ? "acc1" : "acc2") : (it.slot as GearSlot);
+      const cur = p.eq[slot] ? ITEMS[p.eq[slot]!] : undefined;
+      if (!cur || gearScore(it, p.job) > gearScore(cur, p.job) + 0.5) return; // an upgrade: keep it for auto-equip
+    }
+    out.push(i);
+  });
+  return out;
+}
+
+/** Beta: sell everything the Auto Sell options allow. Returns zeny earned. */
+export function autoSellNow(quiet = true): number {
+  const p = world.player;
+  if (!p) return 0;
+  const idx = autoSellIndexes();
+  if (!idx.length) return 0;
+  let total = 0;
+  let n = 0;
+  for (const i of idx.reverse()) {
+    const st = p.inv[i]!;
+    const it = ITEMS[st.itemId]!;
+    total += sellPrice(it) * st.qty;
+    n += st.qty;
+    p.inv.splice(i, 1);
+  }
+  p.marks += total;
+  const o = world.auto.sell;
+  o.sold += n;
+  o.earned += total;
+  o.last = `Sold ${n} for ${total}z`;
+  if (!quiet) log(`Auto Sell: ${o.last}.`);
+  sfxCoin();
+  persist();
+  bump();
+  return total;
 }
 
 export function sellJunk() {
@@ -858,11 +1048,12 @@ export function trySell(index: number) {
   const it = ITEMS[stack.itemId];
   if (!it) return;
   const price = sellPrice(it);
+  if (stack.cards?.length) for (const c of stack.cards) addItem(c, 1);
   p.marks += price;
   stack.qty -= 1;
   if (stack.qty <= 0) p.inv.splice(index, 1);
   sfxCoin();
-  log(`Sold for ${price}z.`);
+  log(`Sold for ${price}z.${stack.cards?.length ? " Its cards came back to the bag." : ""}`);
   persist();
   bump();
 }
@@ -967,8 +1158,10 @@ export function betaSetJob(job: JobId) {
     if (!id) continue;
     const it = ITEMS[id];
     if (!it || canEquip(job, it)) continue;
+    const worn = p.eqCards?.[slot];
     p.eq[slot] = null;
-    give(id, 1);
+    setWornCards(slot, undefined);
+    addItem(id, 1, worn);
     returned = true;
   }
   if (returned) log("Gear this job can't wear went back to the bag.");

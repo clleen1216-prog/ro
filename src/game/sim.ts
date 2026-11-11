@@ -1,12 +1,13 @@
 import { castVfx, spawnVfx, stepVfx, type VfxKind } from "@/game/vfx";
 import { MOB_SKILLS, aiFor, skillsFor, type MobSkill } from "@/game/mobskills";
 import { STATUS_INFO, applyStatus, clearStatus, isCC, isSilenced, tickStatus, type StatusKind } from "@/game/status";
+import { cardMods } from "@/game/cardfx";
 import { followSnapshots, isPartyMate, net, netTick, send as netSend, sendHit } from "@/game/net";
 import { EPX } from "@/game/blocky";
 import { sfxBow, sfxCrit, sfxCast, sfxDown, sfxFoot, sfxHeal, sfxHit, sfxMiss, sfxPickup, sfxPortal, sfxSwing } from "@/game/audio";
 import { ITEMS, MONSTERS, SKILLS, TILE, getMap, isBlocked } from "@/game/content";
 import type { BuffStat, Dir, Drop, MapId, Monster, SkillDef, SkillId } from "@/game/types";
-import { INV_CAP, autoEquip, bump, burst, derive, dust, enterMap, float, grantKill, log, openNpc, useStack, world } from "@/game/world";
+import { INV_CAP, autoEquip, autoSellNow, bump, burst, derive, dust, enterMap, float, grantKill, log, openNpc, useStack, world } from "@/game/world";
 
 function logPickup(name: string, rare?: boolean) {
   log(rare ? `Rare drop! You picked up ${name}.` : `Picked up ${name}.`);
@@ -342,6 +343,15 @@ function hurtNow(m: Monster, dmg: number, color: string, by?: string) {
   const st = MONSTERS[m.kind]!;
   const p = world.player;
   if (!m.alive) return;
+  if (!by && p) {
+    const cm = cardMods(p);
+    if ((st.boss || st.mini) && cm.bossPct) dmg = Math.round(dmg * (1 + cm.bossPct / 100));
+    if (cm.drain && dmg > 0) {
+      const heal = Math.max(1, Math.round((dmg * cm.drain) / 100));
+      p.hp = Math.min(derive(p).maxHp, p.hp + heal);
+      float(p.x, p.y - 60, `+${heal}`, "#7ad04a");
+    }
+  }
   m.hp -= dmg;
   m.hurt = 0.2;
   m.aggro = st.behavior !== "skittish";
@@ -1625,6 +1635,13 @@ export function step(dt0: number) {
   }
   stepVfx(dt0);
   netTick(dt0);
+  if (world.auto.sell.on && world.player) {
+    world.auto.sell.t -= dt0;
+    if (world.auto.sell.t <= 0) {
+      world.auto.sell.t = 1.5;
+      autoSellNow(true);
+    }
+  }
   for (const c of world.crits) c.t += dt0;
   world.crits = world.crits.filter((c) => c.t < 0.45);
   runLater(dt);
