@@ -1,4 +1,6 @@
-import { castVfx, stepVfx } from "@/game/vfx";
+import { castVfx, spawnVfx, stepVfx, type VfxKind } from "@/game/vfx";
+import { MOB_SKILLS, aiFor, skillsFor, type MobSkill } from "@/game/mobskills";
+import { STATUS_INFO, applyStatus, clearStatus, isCC, isSilenced, tickStatus, type StatusKind } from "@/game/status";
 import { followSnapshots, isPartyMate, net, netTick, send as netSend, sendHit } from "@/game/net";
 import { EPX } from "@/game/blocky";
 import { sfxBow, sfxCrit, sfxCast, sfxDown, sfxFoot, sfxHeal, sfxHit, sfxMiss, sfxPickup, sfxPortal, sfxSwing } from "@/game/audio";
@@ -248,7 +250,7 @@ function monsterById(id: string | null) {
 
 export function basicAttack() {
   const p = world.player;
-  if (!p || p.downFor > 0) return;
+  if (!p || p.downFor > 0 || isCC()) return;
   const target = monsterById(world.targetId);
   if (!target) return;
   const d = derive(p);
@@ -372,6 +374,10 @@ function hurtNow(m: Monster, dmg: number, color: string, by?: string) {
     if (m.hp <= 0) m.hp = 1;
     return;
   }
+  if (m.hp > 0 && !m.aggro) {
+    m.aggro = true;
+    alertAllies(m);
+  }
   if (m.hp <= 0) {
     m.alive = false;
     m.dyingT = 0.6;
@@ -431,7 +437,9 @@ function runFx(sk: SkillDef, lv: number, d: ReturnType<typeof derive>, target: M
       if (!m.alive) return;
       if (fx.stun) {
         m.cd = Math.max(m.cd, fx.stun + (fx.sr ?? 0) * lv);
+        m.stunT = Math.max(m.stunT ?? 0, fx.stun + (fx.sr ?? 0) * lv);
         m.windup = 0;
+        m.cast = null;
         float(m.x, m.y - 74, "Stun", "#f0e07a");
       }
       if (fx.psn) {
@@ -500,9 +508,16 @@ export function castSkill(id: SkillId) {
   }
 }
 
+const CURES = new Set<string>(["heal", "firstAid", "blessing", "sanctuary", "kyrie", "magnus", "potionPitcher"]);
+
 function castSkillInner(id: SkillId) {
   const p = world.player;
   if (!p || p.downFor > 0) return;
+  if (isCC()) return;
+  if (isSilenced() && SKILLS[id]?.target !== "passive") {
+    float(p.x, p.y - 80, "Silenced", "#c8c0b0");
+    return;
+  }
   const sk = SKILLS[id];
   if (!sk) return;
   const lv = p.skills[id] ?? 0;
@@ -561,6 +576,7 @@ function castSkillInner(id: SkillId) {
       });
     }
   }
+  if (CURES.has(id)) clearStatus(["poison", "curse", "silence", "slow"]);
   castVfx(id, sk, p, target ?? null, later);
   if (net.active) netSend({ t: "fx", f: { id, x: Math.round(p.x), y: Math.round(p.y), tx: target ? Math.round(target.x) : undefined, ty: target ? Math.round(target.y) : undefined } });
   if (sk.fx && sk.fx.t !== "passive") {
@@ -829,6 +845,8 @@ function hurtPlayer(amount: number) {
   const p = world.player;
   if (!p || p.invuln > 0 || p.downFor > 0 || p.feign > 0) return;
   const dmg = Math.max(1, Math.round(amount));
+  if (world.status.sleep > 0) world.status.sleep = 0;
+  if (world.status.freeze > 0 && dmg > p.hp * 0.5) world.status.freeze = 0;
   p.hp -= dmg;
   p.flash = 0.16;
   p.invuln = 0.35;
@@ -853,6 +871,7 @@ function respawn() {
   if (p.job !== "novice") p.baseExp = Math.floor(p.baseExp * 0.9);
   p.downFor = 0;
   p.feign = 0;
+  clearStatus();
   p.invuln = 1.6;
   const d = derive(p);
   p.hp = d.maxHp;
@@ -934,7 +953,7 @@ net.hooks.hit = (from, mid, dmg, col) => {
   const m = monsterById(mid);
   if (m) hurtNow(m, dmg, col, from);
 };
-net.hooks.mhit = (raw, lvl) => strikePlayer(raw, lvl);
+net.hooks.mhit = (raw, lvl, sk, st) => (sk ? skillStrike(raw, st ?? undefined) : strikePlayer(raw, lvl));
 net.hooks.kill = onKill;
 net.hooks.maxHp = () => (world.player ? derive(world.player).maxHp : 1);
 net.hooks.maxSp = () => (world.player ? derive(world.player).maxSp : 1);
@@ -943,23 +962,151 @@ net.hooks.fx = (f) => {
   if (sk) castVfx(f.id, sk, { x: f.x, y: f.y }, f.tx != null && f.ty != null ? { x: f.tx, y: f.ty } : null, later);
 };
 
-type Tgt = { x: number; y: number; hidden: boolean; down: boolean; id: string | null };
+type Tgt = { x: number; y: number; hidden: boolean; down: boolean; id: string | null; hpFrac: number };
 
-/** nearest player a monster can see: this hero or, when hosting, any other hero on the map */
+const hash = (s: string) => {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return Math.abs(h);
+};
+
+/** spawn an effect here and, when hosting, on every other player's screen too */
+function mobVfx(kind: VfxKind, x: number, y: number, col: string, r = 60, dur?: number, txt?: string) {
+  spawnVfx(kind, x, y, col, r, dur, txt);
+  if (net.active && net.host && net.others.size) netSend({ t: "fx", f: { k: kind, x: Math.round(x), y: Math.round(y), c: col, r, d: dur, lb: txt } });
+}
+
+net.hooks.vfx = (f) => spawnVfx(f.k as VfxKind, f.x, f.y, f.c, f.r, f.d, f.lb);
+
+/** nearest (and weakest) player a monster can see: this hero or, when hosting, any other hero on the map */
 function chooseTarget(m: Monster, p: NonNullable<typeof world.player>): Tgt {
-  const me: Tgt = { x: p.x, y: p.y, hidden: p.downFor > 0 || p.feign > 0, down: p.downFor > 0, id: null };
+  const me: Tgt = { x: p.x, y: p.y, hidden: p.downFor > 0 || p.feign > 0, down: p.downFor > 0, id: null, hpFrac: p.hp / Math.max(1, net.hooks.maxHp?.() ?? 1) };
   if (!net.active || !net.host) return me;
-  let best = me.hidden ? null : me;
-  let bd = best ? dist(m.x, m.y, me.x, me.y) : Infinity;
+  const score = (t: Tgt) => dist(m.x, m.y, t.x, t.y) * (0.65 + 0.35 * t.hpFrac) * ((m.tgt ?? null) === t.id ? 0.8 : 1);
+  let best: Tgt | null = me.hidden ? null : me;
+  let bs = best ? score(best) : Infinity;
   for (const o of net.others.values()) {
     if (o.down) continue;
-    const d = dist(m.x, m.y, o.x, o.y);
-    if (d < bd) {
-      bd = d;
-      best = { x: o.x, y: o.y, hidden: false, down: false, id: o.id };
+    const t: Tgt = { x: o.x, y: o.y, hidden: false, down: false, id: o.id, hpFrac: o.hp / Math.max(1, o.maxHp) };
+    const sc = score(t);
+    if (sc < bs) {
+      bs = sc;
+      best = t;
     }
   }
-  return best ?? me;
+  const out = best ?? me;
+  m.tgt = out.id;
+  return out;
+}
+
+const STATUS_WORD: Record<StatusKind, string> = { stun: "stunned", sleep: "put to sleep", poison: "poisoned", slow: "slowed", curse: "cursed", freeze: "frozen", silence: "silenced" };
+
+/** a skill's damage and state land on this hero (no dodge: step out of the telegraph instead) */
+function skillStrike(raw: number, status?: { kind: StatusKind; secs: number; power?: number }) {
+  const p = world.player;
+  if (!p || p.downFor > 0 || p.feign > 0) return;
+  if (raw > 0) {
+    const d = derive(p);
+    hurtPlayer(Math.max(1, raw - d.def * 0.45));
+  }
+  if (status && p.hp > 0) {
+    if (applyStatus(status.kind, status.secs, status.power ?? 1)) {
+      const info = STATUS_INFO[status.kind];
+      float(p.x, p.y - 84, `${info.label}!`, info.col, true);
+      log(`You are ${STATUS_WORD[status.kind]}!`);
+    }
+  }
+}
+
+function alertAllies(m: Monster) {
+  const st = MONSTERS[m.kind]!;
+  const pack = aiFor(m.kind) === "pack" || st.boss || st.mini;
+  for (const o of world.monsters) {
+    if (o === m || !o.alive || o.aggro) continue;
+    const os = MONSTERS[o.kind]!;
+    if (os.boss) continue;
+    const near = dist(o.x, o.y, m.x, m.y);
+    if (near < (pack ? 300 : 150) && (o.kind === m.kind || (pack && os.behavior === "aggressive"))) {
+      o.aggro = true;
+      o.tgt = m.tgt ?? null;
+    }
+  }
+}
+
+function startSkill(m: Monster, sk: MobSkill, tg: Tgt) {
+  const pt = sk.self ? { x: m.x, y: m.y } : { x: tg.x, y: tg.y };
+  m.cast = { id: sk.id, t: sk.wind, w: sk.wind, x: pt.x, y: pt.y };
+  m.windup = 0;
+  m.dir = face(tg.x - m.x, tg.y - m.y);
+  if (sk.special === "heal") mobVfx("aura", m.x, m.y, sk.col, 60);
+  else if (sk.special === "call" || sk.special === "howl") mobVfx("howl", m.x, m.y - 10, sk.col, sk.special === "call" ? 120 : sk.r, sk.wind, sk.name);
+  else mobVfx("warn", pt.x, pt.y, sk.col, Math.max(sk.r, 30), sk.wind, sk.name);
+  if (sk.special === "dash") m.dashTo = { x: pt.x, y: pt.y, hit: false };
+}
+
+function hitPlayersIn(x: number, y: number, r: number, raw: number, sk: MobSkill) {
+  const p = world.player!;
+  if (dist(p.x, p.y, x, y) <= r + 14) skillStrike(raw, sk.status);
+  if (net.active && net.host)
+    for (const o of net.others.values()) if (!o.down && dist(o.x, o.y, x, y) <= r + 14) netSend({ t: "mhit", to: o.id, raw: Math.round(raw), lvl: 0, sk: 1, st: sk.status ?? null });
+}
+
+function resolveSkill(m: Monster, st: (typeof MONSTERS)[string], tg: Tgt) {
+  const c = m.cast;
+  if (!c) return;
+  m.cast = null;
+  const sk = MOB_SKILLS[c.id]!;
+  const en = m.enraged ? 1.25 : 1;
+  const raw = st.atk * sk.dmg * en * (0.9 + Math.random() * 0.2);
+  m.skCd = sk.cd * (m.enraged ? 0.6 : 1) * (0.85 + Math.random() * 0.3);
+  m.cd = Math.max(m.cd, 0.7);
+  switch (sk.special) {
+    case "heal": {
+      m.hp = Math.min(m.maxHp, m.hp + m.maxHp * 0.14);
+      mobVfx("heal", m.x, m.y, sk.col, 60);
+      float(m.x, m.y - 80, "Regenerate", "#7ad04a");
+      return;
+    }
+    case "call": {
+      mobVfx("howl", m.x, m.y - 10, sk.col, 140);
+      let n = 0;
+      const map = getMap(world.mapId);
+      for (const o of world.monsters) {
+        if (n >= 4) break;
+        if (o === m || !o.alive || MONSTERS[o.kind]!.boss || dist(o.x, o.y, m.x, m.y) > 460) continue;
+        const a = Math.random() * Math.PI * 2;
+        const nx = m.x + Math.cos(a) * (56 + Math.random() * 34);
+        const ny = m.y + Math.sin(a) * (56 + Math.random() * 34);
+        if (isBlocked(map, nx, ny)) continue;
+        mobVfx("smoke", o.x, o.y, "#8a8294", 40);
+        o.x = nx;
+        o.y = ny;
+        o.aggro = true;
+        o.tgt = tg.id;
+        o.spawnT = 0.4;
+        mobVfx("smoke", nx, ny, "#ff9a5a", 40);
+        n++;
+      }
+      return;
+    }
+    case "howl": {
+      mobVfx("howl", m.x, m.y - 10, sk.col, sk.r);
+      for (const o of world.monsters) if (o.alive && dist(o.x, o.y, m.x, m.y) < 340 && !MONSTERS[o.kind]!.boss) o.aggro = true;
+      hitPlayersIn(m.x, m.y, sk.r, 0, sk);
+      return;
+    }
+    case "dash": {
+      m.dashTo = { x: c.x, y: c.y, hit: false };
+      mobVfx("smoke", m.x, m.y, sk.col, 50);
+      return;
+    }
+    default:
+      break;
+  }
+  mobVfx(sk.vfx, c.x, c.y, sk.col, sk.r);
+  if (sk.vfx !== "shock" && sk.self) mobVfx("shock", c.x, c.y, sk.col, sk.r);
+  world.shake = Math.min(7, world.shake + 3);
+  hitPlayersIn(c.x, c.y, sk.r, raw, sk);
 }
 
 function updateMonsters(dt: number) {
@@ -980,6 +1127,9 @@ function updateMonsters(dt: number) {
       }
     }
     m.cd = Math.max(0, m.cd - dt);
+    m.stunT = Math.max(0, (m.stunT ?? 0) - dt);
+    m.skCd = Math.max(0, (m.skCd ?? 0) - dt);
+    m.retreat = Math.max(0, (m.retreat ?? 0) - dt);
     m.lunge = Math.max(0, m.lunge - dt);
     m.spawnT = Math.max(0, m.spawnT - dt);
     m.moving = false;
@@ -1014,7 +1164,20 @@ function updateMonsters(dt: number) {
         m.windup = 0;
         m.kbx = 0;
         m.kby = 0;
+        m.enraged = false;
+        m.cast = null;
+        m.dashTo = null;
+        m.stunT = 0;
+        m.poison = 0;
+        m.skCd = 3 + Math.random() * 4;
       }
+      continue;
+    }
+    if ((m.stunT ?? 0) > 0) {
+      m.windup = 0;
+      m.cast = null;
+      m.dashTo = null;
+      m.anim += dt * 6;
       continue;
     }
     const st = MONSTERS[m.kind]!;
@@ -1022,11 +1185,106 @@ function updateMonsters(dt: number) {
     const hidden = tg.hidden;
     const dd = dist(m.x, m.y, tg.x, tg.y);
     const home = dist(m.x, m.y, m.homeX, m.homeY);
+    const ai = aiFor(m.kind);
+    const skills = skillsFor(m.kind);
+    const big = !!(st.boss || st.mini);
+    const en = m.enraged ? 1.25 : 1;
     if (hidden) m.aggro = false;
-    if (home > 320) m.aggro = false;
-    if (!hidden && !m.aggro && st.behavior === "aggressive" && dd < st.aggro) m.aggro = true;
+    if (home > (big ? 520 : 340)) m.aggro = false;
+    if (!hidden && !m.aggro && st.behavior === "aggressive" && dd < st.aggro) {
+      m.aggro = true;
+      if (ai === "pack" || big) alertAllies(m);
+    }
+    if (m.aggro) m.idle = 0;
+    else {
+      m.idle = (m.idle ?? 0) + dt;
+      // leashed monsters regenerate so they cannot be whittled down by pulling and running
+      if (m.idle > 3 && m.hp < m.maxHp) m.hp = Math.min(m.maxHp, m.hp + m.maxHp * 0.08 * dt);
+    }
+    if (big && !m.enraged && m.hp < m.maxHp * 0.35) {
+      m.enraged = true;
+      mobVfx("aura", m.x, m.y, "#ff4a3a", 60);
+      mobVfx("shock", m.x, m.y, "#ff4a3a", 120);
+      float(m.x, m.y - 90, "ENRAGED!", "#ff5a3a", true);
+      world.shake = Math.min(7, world.shake + 4);
+    }
+
+    // charging at a locked point (Rampage Charge)
+    if (m.dashTo) {
+      const d = m.dashTo;
+      const to = dist(m.x, m.y, d.x, d.y);
+      m.dir = face(d.x - m.x, d.y - m.y);
+      m.moving = true;
+      m.anim += dt * 12;
+      creep(m, d.x, d.y, 540 * dt);
+      if (!d.hit) {
+        const sk = MOB_SKILLS.charge!;
+        const raw = st.atk * sk.dmg * en;
+        if (dist(m.x, m.y, p.x, p.y) < 48) {
+          d.hit = true;
+          skillStrike(raw, sk.status);
+        } else if (net.active && net.host)
+          for (const o of net.others.values())
+            if (!o.down && dist(m.x, m.y, o.x, o.y) < 48) {
+              d.hit = true;
+              netSend({ t: "mhit", to: o.id, raw: Math.round(raw), lvl: 0, sk: 1, st: sk.status ?? null });
+              break;
+            }
+      }
+      if (to < 20 || d.hit) {
+        mobVfx("shock", m.x, m.y, "#e4b15a", 70);
+        m.dashTo = null;
+        m.cd = Math.max(m.cd, 0.9);
+      }
+      continue;
+    }
+    // special skills: telegraph, then resolve
+    if (m.cast) {
+      m.cast.t -= dt;
+      m.dir = face(tg.x - m.x, tg.y - m.y);
+      m.anim += dt * 3;
+      m.windup = 0.1;
+      if (m.cast.t <= 0) resolveSkill(m, st, tg);
+      continue;
+    }
+    if (m.aggro && !hidden && skills.length && m.skCd! <= 0 && !m.windup) {
+      const ready = skills.filter((s) => dd >= s.min && dd <= s.max && (!s.hpBelow || m.hp < m.maxHp * s.hpBelow) && (s.special !== "call" || world.monsters.some((o) => o !== m && o.alive && !o.aggro && dist(o.x, o.y, m.x, m.y) < 460)));
+      if (ready.length) {
+        startSkill(m, ready[Math.floor(Math.random() * ready.length)]!, tg);
+        continue;
+      }
+    }
+
+    // hit-and-run: back off after every blow
+    if (ai === "hitrun" && (m.retreat ?? 0) > 0 && !hidden) {
+      const dx = m.x - tg.x;
+      const dy = m.y - tg.y;
+      const len = Math.hypot(dx, dy) || 1;
+      m.dir = face(tg.x - m.x, tg.y - m.y);
+      m.moving = creep(m, m.x + (dx / len) * 90, m.y + (dy / len) * 90, st.speed * 1.15 * dt) > 0.4;
+      m.anim += dt * 6;
+      continue;
+    }
 
     const reach = st.boss ? 46 : 36;
+    // ranged skirmishers keep their distance until they can cast
+    const kite = ai === "kite" && !hidden && m.aggro && dd > reach + 6;
+    if (kite) {
+      const want = 140;
+      const dx = m.x - tg.x;
+      const dy = m.y - tg.y;
+      const len = Math.hypot(dx, dy) || 1;
+      m.dir = face(tg.x - m.x, tg.y - m.y);
+      if (dd < want - 20) m.moving = creep(m, m.x + (dx / len) * 80, m.y + (dy / len) * 80, st.speed * dt) > 0.4;
+      else if (dd > want + 60) m.moving = creep(m, tg.x, tg.y, st.speed * dt) > 0.4;
+      else {
+        const s = hash(m.id) & 1 ? 1 : -1;
+        m.moving = creep(m, m.x - dy * s * 0.5, m.y + dx * s * 0.5, st.speed * 0.5 * dt) > 0.4;
+      }
+      m.anim += dt * 4;
+      continue;
+    }
+
     if (!hidden && m.aggro && st.behavior !== "skittish" && dd < reach && !tg.down) {
       m.dir = face(tg.x - m.x, tg.y - m.y);
       m.moving = false;
@@ -1037,14 +1295,22 @@ function updateMonsters(dt: number) {
         m.windup -= dt;
         if (m.windup <= 0) {
           m.lunge = 0.2;
-          m.cd = st.boss ? 1.3 : 1.15;
+          m.cd = (st.boss ? 1.3 : 1.15) / en;
+          if (ai === "hitrun") m.retreat = 0.9;
           if (dist(m.x, m.y, tg.x, tg.y) < reach + 14) {
-            if (tg.id) netSend({ t: "mhit", to: tg.id, raw: Math.round(st.atk * (0.88 + Math.random() * 0.24)), lvl: st.level });
-            else strikePlayer(st.atk * (0.88 + Math.random() * 0.24), st.level);
+            const raw = st.atk * en * (0.88 + Math.random() * 0.24);
+            if (tg.id) netSend({ t: "mhit", to: tg.id, raw: Math.round(raw), lvl: st.level });
+            else strikePlayer(raw, st.level);
           }
         }
       } else if (m.cd <= 0) {
         m.windup = 0.28;
+      } else if (m.cd > 0.4 && st.speed > 0) {
+        // circle the target instead of standing still between blows
+        const s = hash(m.id) & 1 ? 1 : -1;
+        const rx = m.x - tg.x;
+        const ry = m.y - tg.y;
+        m.moving = creep(m, m.x - ry * s * 0.6, m.y + rx * s * 0.6, st.speed * 0.38 * dt) > 0.4;
       }
       continue;
     }
@@ -1060,7 +1326,14 @@ function updateMonsters(dt: number) {
     if (!hidden && m.aggro && st.behavior !== "skittish") {
       tx = tg.x;
       ty = tg.y;
-      speed = st.speed;
+      speed = st.speed * en;
+      if (ai === "pack" && dd > reach * 2.4) {
+        // flank: each pack member approaches from a different angle
+        const off = ((hash(m.id) % 3) - 1) * 0.95;
+        const ang = Math.atan2(m.y - tg.y, m.x - tg.x) + off * Math.min(1, (dd - reach * 2.4) / 160);
+        tx = tg.x + Math.cos(ang) * reach * 1.1;
+        ty = tg.y + Math.sin(ang) * reach * 1.1;
+      }
     } else if (!hidden && st.behavior === "skittish" && dd < st.aggro + 24) {
       const dx = m.x - tg.x;
       const dy = m.y - tg.y;
@@ -1378,7 +1651,12 @@ export function step(dt0: number) {
   if (p.sp > d.maxSp) p.sp = d.maxSp;
   // Regeneration scales with max HP/SP, VIT/INT and job. Resting is much faster.
   const rest = p.sit || p.feign > 0 ? 5 : 1;
-  p.hp = Math.min(d.maxHp, p.hp + dt * d.hpRegen * rest);
+  const pd = tickStatus(dt);
+  if (pd > 0 && p.hp > 1) {
+    p.hp = Math.max(1, p.hp - pd);
+    float(p.x, p.y - 60, String(pd), "#8ad04a");
+  }
+  p.hp = Math.min(d.maxHp, p.hp + dt * d.hpRegen * rest * (world.status.poison > 0 ? 0 : 1));
   p.sp = Math.min(d.maxSp, p.sp + dt * d.spRegen * rest);
   // announce when a stat hits its hard limit
   const caps = world.capSeen;
@@ -1401,6 +1679,11 @@ export function step(dt0: number) {
   if (keys.has("KeyS") || keys.has("ArrowDown")) my += 1;
   mx += world.touch.x;
   my += world.touch.y;
+  const frozen = isCC();
+  if (frozen) {
+    mx = 0;
+    my = 0;
+  }
   const manual = Math.abs(mx) + Math.abs(my) > 0.12;
   let movedPx = 0;
   if (p.feign > 0 && !manual) {
@@ -1416,6 +1699,9 @@ export function step(dt0: number) {
     lastMx = mx;
     lastMy = my;
     movedPx = travel(mx, my, d.speed * dt * mag * (0.35 + 0.65 * gain));
+  } else if (frozen) {
+    gain = 0;
+    p.speedInstant = 0;
   } else if (!p.sit && world.path.length) {
     gain = Math.min(1, gain + dt * 8.5);
     const left = world.path.reduce((acc, pt, i, arr) => acc + Math.hypot(pt.x - (i ? arr[i - 1]!.x : p.x), pt.y - (i ? arr[i - 1]!.y : p.y)), 0);
@@ -1434,7 +1720,7 @@ export function step(dt0: number) {
     gain = 0;
   }
   if (manual && world.auto.travel) cancelTravel();
-  if (!manual) autoStep(dt, d);
+  if (!manual && !frozen) autoStep(dt, d);
   const rawSpeed = dt > 0 ? movedPx / dt : 0;
   p.speedInstant = rawSpeed;
   noteSteps(movedPx);

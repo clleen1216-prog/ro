@@ -1,4 +1,5 @@
-import { drawVfx } from "@/game/vfx";
+import { SF, drawStatusFx, drawVfx } from "@/game/vfx";
+import { statusFlags } from "@/game/status";
 import { isPartyMate, net } from "@/game/net";
 import { rarityColor, RARITY, rarityOf } from "@/game/gear";
 import { buildingSprite, drawBlockActor, propSprite, type ActorParts } from "@/game/blockart";
@@ -873,6 +874,10 @@ export function renderFrame(canvas: HTMLCanvasElement, dt: number) {
           alpha: Math.min(1, 0.3 + e),
         });
         const top = m.y - (def.draw + (def.fly ? 18 : 0)) * (EPX / 3);
+        {
+          const mf = ((m.stunT ?? 0) > 0 ? SF.stun : 0) | ((m.poison ?? 0) > 0 ? SF.poison : 0) | (m.enraged ? SF.enrage : 0);
+          if (mf) drawStatusFx(ctx, m.x, m.y, mf, world.time, def.draw * 0.55, Math.max(0.8, def.draw / 90));
+        }
         label(ctx, `${def.boss ? "★ " : def.mini ? "◆ " : ""}${def.name}`, m.x, top - 6, def.boss ? "#ffd86a" : def.mini ? "#8fd8ff" : "#f6f0e4");
         if (m.hp < m.maxHp || targeted || def.boss || def.mini) {
           const bw = def.boss ? 56 : def.mini ? 46 : 36;
@@ -947,6 +952,10 @@ export function renderFrame(canvas: HTMLCanvasElement, dt: number) {
         ctx.restore();
         if (down) return;
         label(ctx, p.name, p.x, p.y - 33 * EPX, "#fff6df");
+        {
+          const sf0 = statusFlags();
+          if (sf0) drawStatusFx(ctx, p.x, p.y, sf0, world.time);
+        }
         if (p.feign > 0) label(ctx, "Playing dead", p.x, p.y - 33 * EPX - 18, "#b7ad9c");
         else if (p.sit) label(ctx, "Resting", p.x, p.y - 33 * EPX - 18, "#7dba6a");
         if (world.say && world.sayUntil > world.time) {
@@ -977,6 +986,7 @@ export function renderFrame(canvas: HTMLCanvasElement, dt: number) {
           if (o.down) ctx.globalAlpha = 0.5;
           drawActor(ctx, o.x, o.y, o.dir, o.anim * (Math.PI / 2), o.amt, lk.style, lk.hair, lk.trim, lk.eq, o.sit || o.down, 0, 0, 0, o.atk, undefined, 0, lk.job);
           ctx.restore();
+          if (o.sf) drawStatusFx(ctx, o.x, o.y, o.sf, world.time);
           const mate = isPartyMate(o.id);
           label(ctx, `${mate ? "♥ " : ""}${o.name}`, o.x, o.y - 33 * EPX, mate ? "#9be28a" : "#bfe0ff");
           if (mate && o.maxHp > 0) {
@@ -1099,6 +1109,15 @@ export function renderFrame(canvas: HTMLCanvasElement, dt: number) {
     ctx.fillStyle = "#f6f0e4";
     ctx.fillText(b.sub, cssW / 2, y + 28);
     ctx.restore();
+  }
+  {
+    const sf = statusFlags();
+    const tint = sf & SF.freeze ? "158,228,255" : sf & SF.sleep ? "40,50,110" : sf & SF.poison ? "90,200,60" : sf & SF.curse ? "130,60,190" : sf & SF.stun ? "255,226,74" : "";
+    if (tint) {
+      const a = (sf & SF.sleep ? 0.22 : 0.09) + 0.03 * Math.sin(world.time * 5);
+      ctx.fillStyle = `rgba(${tint},${a})`;
+      ctx.fillRect(0, 0, cssW, cssH);
+    }
   }
   if (world.flash > 0.01) {
     ctx.fillStyle = `rgba(255,236,170,${world.flash})`;

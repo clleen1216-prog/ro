@@ -2,6 +2,7 @@
 // One device per map ("host") simulates the monsters and streams snapshots; the others render
 // them and send their hits to the host. Parties share EXP and see each other's HP.
 import { bump, world } from "@/game/world";
+import { statusFlags } from "@/game/status";
 import type { Dir, GearSlot, HairStyle, JobId, MapId } from "@/game/types";
 
 export type Look = { style: HairStyle; hair: string; trim: string; job: JobId; eq: Record<GearSlot, string | null>; lv: number };
@@ -21,6 +22,8 @@ export type Remote = {
   down: boolean;
   hp: number;
   maxHp: number;
+  /** status bitmask (see status.ts) */
+  sf: number;
   seen: number;
 };
 export type PartyMember = { id: string; name: string; hp: number; maxHp: number; sp: number; maxSp: number; lv: number; map: string | null };
@@ -28,7 +31,8 @@ export type PartyState = { id: string; leader: string; members: PartyMember[] };
 
 type Hooks = {
   hit?: (from: string, mid: string, dmg: number, col: string) => void;
-  mhit?: (raw: number, lvl: number) => void;
+  mhit?: (raw: number, lvl: number, sk?: number, st?: { kind: any; secs: number; power?: number } | null) => void;
+  vfx?: (f: { k: string; x: number; y: number; c: string; r: number; d?: number; lb?: string }) => void;
   kill?: (killer: string, kind: string, x: number, y: number) => void;
   fx?: (f: { id: string; x: number; y: number; tx?: number; ty?: number }) => void;
   maxHp?: () => number;
@@ -211,6 +215,7 @@ function onMsg(m: Record<string, any>) {
       o.down = !!p.dn;
       o.hp = p.hp;
       o.maxHp = p.mx;
+      o.sf = p.sf ?? 0;
       o.seen = world.time;
       break;
     }
@@ -229,13 +234,14 @@ function onMsg(m: Record<string, any>) {
       net.hooks.hit?.(m.from, m.mid, m.dmg, m.col);
       break;
     case "mhit":
-      net.hooks.mhit?.(m.raw, m.lvl);
+      net.hooks.mhit?.(m.raw, m.lvl, m.sk, m.st ? { kind: m.st.kind, secs: m.st.secs, power: m.st.power } : null);
       break;
     case "kill":
       net.hooks.kill?.(m.killer, m.kind, m.x, m.y);
       break;
     case "fx":
-      net.hooks.fx?.(m as { id: string; x: number; y: number });
+      if (m.k) net.hooks.vfx?.(m as never);
+      else net.hooks.fx?.(m as { id: string; x: number; y: number });
       break;
     case "party":
       net.party = m.id ? { id: m.id, leader: m.leader, members: m.members } : null;
@@ -272,6 +278,7 @@ function addRemote(o: any) {
     down: !!p.dn,
     hp: p.hp ?? 1,
     maxHp: p.mx ?? 1,
+    sf: p.sf ?? 0,
     seen: world.time,
   });
 }
@@ -282,12 +289,12 @@ export function isPartyMate(id: string | null | undefined) {
 
 // ───────── monster snapshots ─────────
 // entry: [index, x, y, hp, dir, flags, anim, dyingT*10]
-const F = { alive: 1, moving: 2, aggro: 4, hurt: 8, windup: 16, lunge: 32 };
+const F = { alive: 1, moving: 2, aggro: 4, hurt: 8, windup: 16, lunge: 32, stun: 64, poison: 128, enrage: 256 };
 
 function encodeMonsters(): number[][] {
   const out: number[][] = [];
   world.monsters.forEach((m, i) => {
-    const f = (m.alive ? F.alive : 0) | (m.moving ? F.moving : 0) | (m.aggro ? F.aggro : 0) | (m.hurt > 0.1 ? F.hurt : 0) | (m.windup > 0 ? F.windup : 0) | (m.lunge > 0 ? F.lunge : 0);
+    const f = (m.alive ? F.alive : 0) | (m.moving ? F.moving : 0) | (m.aggro ? F.aggro : 0) | (m.hurt > 0.1 ? F.hurt : 0) | (m.windup > 0 ? F.windup : 0) | (m.lunge > 0 ? F.lunge : 0) | ((m.stunT ?? 0) > 0 ? F.stun : 0) | ((m.poison ?? 0) > 0 ? F.poison : 0) | (m.enraged ? F.enrage : 0);
     out.push([i, Math.round(m.x), Math.round(m.y), Math.max(0, Math.round(m.hp)), m.dir, f, Math.round(m.anim * 10) / 10, Math.round(m.dyingT * 10)]);
   });
   return out;
@@ -308,6 +315,9 @@ function applySnap(s: number[][], hard = false) {
     m.aggro = (f & F.aggro) !== 0;
     m.windup = f & F.windup ? 0.2 : 0;
     m.lunge = f & F.lunge ? 0.2 : 0;
+    m.stunT = f & F.stun ? 0.5 : 0;
+    m.poison = f & F.poison ? 1 : 0;
+    m.enraged = (f & F.enrage) !== 0;
     const prev = flagsPrev.get(e[0]!) ?? 0;
     if (f & F.hurt && !(prev & F.hurt)) m.hurt = 0.2;
     flagsPrev.set(e[0]!, f);
@@ -385,6 +395,7 @@ export function netTick(dt: number) {
         dn: p.downFor > 0 ? 1 : 0,
         hp: Math.round(p.hp),
         mx: net.hooks.maxHp?.() ?? 1,
+        sf: statusFlags(),
       },
     });
   }

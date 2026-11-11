@@ -271,6 +271,21 @@ export type Monster = {
   poison?: number;
   psnDps?: number;
   psnT?: number;
+  /** seconds left stunned by a player skill */
+  stunT?: number;
+  enraged?: boolean;
+  /** seconds until the next special skill may start */
+  skCd?: number;
+  /** skill being wound up: telegraph circle at (x,y) */
+  cast?: { id: string; t: number; w: number; x: number; y: number } | null;
+  /** hit-and-run: seconds spent backing off */
+  retreat?: number;
+  /** seconds since the monster last had a target (for the leash heal) */
+  idle?: number;
+  /** current target id (null = this hero) so mobs stay on one victim */
+  tgt?: string | null;
+  /** charging at this point (Rampage Charge) */
+  dashTo?: { x: number; y: number; hit: boolean } | null;
 };
 
 export type Drop = {

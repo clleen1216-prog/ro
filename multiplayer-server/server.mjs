@@ -235,7 +235,7 @@ function handle(c, m) {
       break;
     }
     case "mhit": // host -> victim
-      sendId(m.to, { t: "mhit", raw: m.raw, lvl: m.lvl });
+      sendId(m.to, { t: "mhit", raw: m.raw, lvl: m.lvl, sk: m.sk, st: m.st });
       break;
     case "kill": {
       const room = c.map ? rooms.get(c.map) : null;

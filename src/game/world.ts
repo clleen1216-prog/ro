@@ -55,6 +55,8 @@ export const world = {
   drops: [] as Drop[],
   floats: [] as FloatText[],
   crits: [] as CritFx[],
+  /** abnormal states on the hero (seconds left) */
+  status: { stun: 0, sleep: 0, freeze: 0, poison: 0, psnDps: 0, psnT: 0, slow: 0, curse: 0, silence: 0, immune: 0 },
   vfx: [] as import("@/game/vfx").Vfx[],
   hitStop: 0,
   bossBanner: null as { text: string; sub: string; t: number } | null,
@@ -217,7 +219,9 @@ export function derive(p: Player) {
   const I = p.int + intel;
   const D = p.dex + dex;
   const L = p.luk + luk;
-  return {
+  const slowM = world.status.slow > 0 ? 0.55 : 1;
+  const curseM = world.status.curse > 0 ? 0.7 : 1;
+  const out = {
     str: S,
     agi: A,
     vit: V,
@@ -240,9 +244,14 @@ export function derive(p: Player) {
     hpRegen: ((48 + p.baseLevel * 12 + V * 8) * jd.hp * (1 + pa.hp / 100) * 0.012 * (1 + V / 60) * jobRegen(p.job)[0]),
     spRegen: ((20 + p.baseLevel * 4 + I * 5) * jd.sp * (1 + pa.sp / 100) * 0.016 * (1 + I / 60) * jobRegen(p.job)[1]),
     aspd: Math.max(ASPD_MIN, (1.28 - A * 0.018 - D * 0.006) * (wt ? wt.speed : 1) * (1 - Math.min(60, pa.aspd + bAspd) / 100)),
-    speed: 148 + A * 1.7,
+    speed: (148 + A * 1.7) * slowM,
     range,
   };
+  if (curseM < 1) {
+    out.atk = Math.round(out.atk * curseM);
+    out.matk = Math.round(out.matk * curseM);
+  }
+  return out;
 }
 
 export function makePlayer(draft = world.draft): Player {
@@ -326,6 +335,8 @@ export function spawnMonsters(mapId: MapId): Monster[] {
       kbx: 0,
       kby: 0,
       spawnT: 0.5,
+      skCd: 3 + Math.random() * 4,
+      cast: null,
     };
   });
 }

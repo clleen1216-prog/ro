@@ -32,6 +32,10 @@ export type MonsterDef = {
   /** colour wash over the model */
   tint?: string;
   fly?: boolean;
+  /** special skills this monster can use (see mobskills.ts) */
+  skills?: string[];
+  /** fighting style: hitrun backs off after each blow, kite keeps its distance, pack calls allies */
+  ai?: "hitrun" | "kite" | "pack";
   /** seconds before respawn */
   respawn?: number;
   /** zeny per kill */

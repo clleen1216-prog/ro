@@ -29,6 +29,7 @@ import {
   sellPrice,
 } from "@/game/content";
 import { RARITY, rarityOf, weaponNote } from "@/game/gear";
+import { STATUS_INFO, activeStatuses } from "@/game/status";
 import { acceptInvite, connect, declineInvite, disconnect, invitePlayer, kickMember, leaveParty, net } from "@/game/net";
 import { dropSources, isCollected, itemsForSlot, shopSource, type CodexSlot } from "@/game/codex";
 import { drawItemIcon, drawPreview, renderFrame } from "@/game/draw";
@@ -556,6 +557,7 @@ export function GameApp() {
             {world.panels.wardrobe && <WardrobeWindow />}
             {world.panels.online && <OnlineWindow />}
             <PartyHud />
+            <StatusChips />
             {world.shop && <ShopWindow />}
             {world.storageOpen && <StorageWindow />}
           </div>
@@ -759,6 +761,20 @@ function Bar({ v, max, color }: { v: number; max: number; color: string }) {
   return (
     <div className="h-1.5 w-full bg-black/60">
       <div className="h-full" style={{ width: `${Math.max(0, Math.min(100, (v / Math.max(1, max)) * 100))}%`, background: color }} />
+    </div>
+  );
+}
+
+function StatusChips() {
+  const list = activeStatuses();
+  if (!list.length) return null;
+  return (
+    <div className="pointer-events-none absolute left-1/2 top-16 z-30 flex -translate-x-1/2 gap-1">
+      {list.map(({ kind, left }) => (
+        <span key={kind} className="rounded border bg-black/70 px-1.5 py-0.5 text-xs" style={{ borderColor: STATUS_INFO[kind].col, color: STATUS_INFO[kind].col }}>
+          {STATUS_INFO[kind].label} {Math.ceil(left)}s
+        </span>
+      ))}
     </div>
   );
 }

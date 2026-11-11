@@ -4,20 +4,20 @@ import type { SkillDef } from "@/game/types";
 
 export type VfxKind =
   | "aura" | "heal" | "pillar" | "ring" | "bolt" | "slash" | "slash360" | "cross" | "spikes" | "ice"
-  | "fire" | "meteor" | "notes" | "nova" | "smoke" | "coins" | "dome" | "orbs" | "shock" | "bubbles" | "multislash" | "stormbolts";
+  | "fire" | "meteor" | "notes" | "nova" | "smoke" | "coins" | "dome" | "orbs" | "shock" | "bubbles" | "multislash" | "stormbolts" | "warn" | "cloud" | "runes" | "howl";
 
-export type Vfx = { kind: VfxKind; x: number; y: number; col: string; t: number; dur: number; r: number; seed: number };
+export type Vfx = { kind: VfxKind; x: number; y: number; col: string; t: number; dur: number; r: number; seed: number; txt?: string };
 
 const U = 3;
 const q = (v: number) => Math.round(v / U) * U;
 const DUR: Record<VfxKind, number> = {
   aura: 1.0, heal: 1.1, pillar: 0.9, ring: 0.7, bolt: 0.5, slash: 0.35, slash360: 0.45, cross: 0.7, spikes: 0.8, ice: 0.8,
-  fire: 0.9, meteor: 1.0, notes: 1.4, nova: 0.7, smoke: 0.9, coins: 0.9, dome: 1.2, orbs: 0.9, shock: 0.55, bubbles: 1.1, multislash: 0.5, stormbolts: 1.0,
+  fire: 0.9, meteor: 1.0, notes: 1.4, nova: 0.7, smoke: 0.9, coins: 0.9, dome: 1.2, orbs: 0.9, shock: 0.55, bubbles: 1.1, multislash: 0.5, stormbolts: 1.0, warn: 1, cloud: 1.8, runes: 1.3, howl: 0.9,
 };
 
-export function spawnVfx(kind: VfxKind, x: number, y: number, col: string, r = 60) {
-  world.vfx.push({ kind, x, y, col, t: 0, dur: DUR[kind], r, seed: Math.random() * 1000 });
-  if (world.vfx.length > 60) world.vfx.shift();
+export function spawnVfx(kind: VfxKind, x: number, y: number, col: string, r = 60, dur?: number, txt?: string) {
+  world.vfx.push({ kind, x, y, col, t: 0, dur: dur ?? DUR[kind], r, seed: Math.random() * 1000, txt });
+  if (world.vfx.length > 90) world.vfx.shift();
 }
 
 export function stepVfx(dt: number) {
@@ -412,6 +412,79 @@ function drawOne(ctx: CanvasRenderingContext2D, v: Vfx) {
       }
       break;
     }
+    case "warn": {
+      // ground telegraph: the red disc fills up until the skill lands
+      const rr = v.r;
+      const pulse = 0.5 + 0.5 * Math.sin(v.t * 14);
+      ctx.fillStyle = "#ff3a2a";
+      ctx.globalAlpha = 0.1 + 0.1 * pulse;
+      ctx.beginPath(); ctx.ellipse(0, 0, rr, rr * 0.45, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 0.28 + 0.12 * pulse;
+      ctx.beginPath(); ctx.ellipse(0, 0, rr * Math.min(1, k), rr * 0.45 * Math.min(1, k), 0, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 0.85;
+      ctx.strokeStyle = pulse > 0.5 ? "#ffd24a" : "#ff5a3a";
+      ctx.lineWidth = 3;
+      ctx.setLineDash([9, 6]);
+      ctx.beginPath(); ctx.ellipse(0, 0, rr, rr * 0.45, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = "#ffd24a";
+      ctx.globalAlpha = 1;
+      px(ctx, -3, -12, 6, 12);
+      px(ctx, -3, 3, 6, 6);
+      break;
+    }
+    case "cloud": {
+      const spread = v.r * Math.min(1, 0.4 + k * 1.6);
+      ctx.globalAlpha = Math.min(0.7, fade * 1.1, k * 6);
+      for (let i = 0; i < 26; i++) {
+        const a = rnd(v.seed + i) * Math.PI * 2;
+        const d = Math.sqrt(rnd(v.seed + i + 40)) * spread;
+        const sz = q(14 + rnd(v.seed + i + 9) * 18);
+        const bob = Math.sin(v.t * 2 + i) * 4;
+        ctx.fillStyle = i % 3 === 0 ? "#ffffff" : col;
+        px(ctx, Math.cos(a) * d - sz / 2, Math.sin(a) * d * 0.45 - sz / 2 - 10 + bob, sz, sz);
+      }
+      break;
+    }
+    case "runes": {
+      ctx.globalAlpha = Math.min(1, fade * 1.5);
+      ctx.lineWidth = 3;
+      for (let ring = 0; ring < 2; ring++) {
+        const rr = v.r * (ring ? 0.6 : 1) * Math.min(1, k * 3);
+        ctx.setLineDash([12, 8]);
+        ctx.lineDashOffset = -v.t * (ring ? -60 : 60);
+        ctx.beginPath(); ctx.ellipse(0, 0, rr, rr * 0.45, 0, 0, Math.PI * 2); ctx.stroke();
+      }
+      ctx.setLineDash([]);
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2 + v.t * 1.6;
+        const rr = v.r * 0.8 * Math.min(1, k * 3);
+        const gx = Math.cos(a) * rr, gy = Math.sin(a) * rr * 0.45;
+        px(ctx, gx, gy - 9, 6, 6);
+        px(ctx, gx + 6, gy - 3, 3, 9);
+      }
+      for (let i = 0; i < 6; i++) {
+        const up = (k * 1.5 + i * 0.17) % 1;
+        px(ctx, (rnd(v.seed + i) - 0.5) * v.r, -up * 60, 6, 6);
+      }
+      break;
+    }
+    case "howl": {
+      for (let i = 0; i < 3; i++) {
+        const kk = k * 1.4 - i * 0.18;
+        if (kk <= 0 || kk >= 1) continue;
+        ctx.globalAlpha = (1 - kk) * 0.9;
+        ctx.lineWidth = 5;
+        ctx.beginPath(); ctx.ellipse(0, -20, v.r * kk, v.r * kk * 0.45, 0, 0, Math.PI * 2); ctx.stroke();
+      }
+      ctx.globalAlpha = fade;
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * Math.PI * 2;
+        const d0 = 20 + k * v.r * 0.7;
+        px(ctx, Math.cos(a) * d0, -20 + Math.sin(a) * d0 * 0.45, 6, 6);
+      }
+      break;
+    }
     case "bubbles": {
       ctx.globalAlpha = Math.min(1, fade * 1.6);
       ctx.lineWidth = 3;
@@ -424,9 +497,122 @@ function drawOne(ctx: CanvasRenderingContext2D, v: Vfx) {
       break;
     }
   }
+  if (v.txt) {
+    ctx.globalAlpha = 1;
+    ctx.font = "700 12px sans-serif";
+    ctx.textAlign = "center";
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = "#1a0f0a";
+    ctx.strokeText(v.txt, 0, -v.r * 0.45 - 14);
+    ctx.fillStyle = "#ffd24a";
+    ctx.fillText(v.txt, 0, -v.r * 0.45 - 14);
+  }
   ctx.restore();
 }
 
 export function drawVfx(ctx: CanvasRenderingContext2D) {
   for (const v of world.vfx) drawOne(ctx, v);
+}
+
+// ───────── status overlays on a body (feet at x,y) ─────────
+export const SF = { stun: 1, sleep: 2, poison: 4, slow: 8, curse: 16, freeze: 32, silence: 64, enrage: 256 };
+
+export function drawStatusFx(ctx: CanvasRenderingContext2D, x: number, y: number, flags: number, t: number, head = 118, scale = 1) {
+  if (!flags) return;
+  ctx.save();
+  ctx.translate(Math.round(x), Math.round(y));
+  ctx.scale(scale, scale);
+  const hy = -head;
+  if (flags & SF.freeze) {
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = "#9ee4ff";
+    ctx.fillRect(-18, hy - 6, 36, head + 8);
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = "#e8fbff";
+    ctx.fillRect(-18, hy - 6, 36, 3);
+    ctx.fillRect(-18, hy - 6, 3, head + 8);
+    ctx.fillRect(9, hy + 6, 3, 18);
+    ctx.fillRect(-9, hy + 30, 9, 3);
+  }
+  if (flags & SF.stun) {
+    for (let i = 0; i < 3; i++) {
+      const a = t * 5 + (i / 3) * Math.PI * 2;
+      const sx = Math.cos(a) * 16, sy = Math.sin(a) * 5;
+      ctx.fillStyle = "#ffe24a";
+      px(ctx, sx - 3, hy - 10 + sy, 6, 6);
+      px(ctx, sx - 6, hy - 7 + sy, 12, 0.1 + 3);
+      px(ctx, sx - 1.5, hy - 13 + sy, 3, 12);
+    }
+  }
+  if (flags & SF.sleep) {
+    for (let i = 0; i < 3; i++) {
+      const up = (t * 0.6 + i / 3) % 1;
+      const zx = 10 + up * 14, zy = hy - 6 - up * 30;
+      ctx.globalAlpha = 1 - up;
+      ctx.fillStyle = "#bcd0ff";
+      const s = 6 + i * 3;
+      px(ctx, zx, zy, s, 3);
+      px(ctx, zx + s - 3, zy, 3, s);
+      px(ctx, zx, zy + s - 3, s, 3);
+    }
+    ctx.globalAlpha = 1;
+  }
+  if (flags & SF.poison) {
+    for (let i = 0; i < 6; i++) {
+      const up = (t * 0.8 + i * 0.17) % 1;
+      const bx = Math.sin(i * 2.1 + t) * 14;
+      ctx.globalAlpha = (1 - up) * 0.9;
+      ctx.fillStyle = i % 2 ? "#8ad04a" : "#5a9a2a";
+      px(ctx, bx, -up * (head * 0.8), 6 - up * 3, 6 - up * 3);
+    }
+    ctx.globalAlpha = 0.16;
+    ctx.fillStyle = "#6ad03a";
+    ctx.fillRect(-16, hy, 32, head);
+    ctx.globalAlpha = 1;
+  }
+  if (flags & SF.slow) {
+    ctx.strokeStyle = "#7ad0c8";
+    ctx.lineWidth = 3;
+    ctx.globalAlpha = 0.7 + 0.3 * Math.sin(t * 6);
+    ctx.beginPath(); ctx.ellipse(0, 0, 20, 8, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-14, -2); ctx.lineTo(14, 2); ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+  if (flags & SF.curse) {
+    ctx.strokeStyle = "#b070e8";
+    ctx.lineWidth = 3;
+    ctx.setLineDash([8, 6]);
+    ctx.lineDashOffset = -t * 40;
+    ctx.beginPath(); ctx.ellipse(0, 0, 26, 10, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([]);
+    for (let i = 0; i < 4; i++) {
+      const up = (t * 0.7 + i * 0.25) % 1;
+      ctx.globalAlpha = 1 - up;
+      ctx.fillStyle = "#b070e8";
+      px(ctx, Math.cos(i * 1.6) * 16, -up * head * 0.9, 6, 6);
+    }
+    ctx.globalAlpha = 1;
+  }
+  if (flags & SF.silence) {
+    ctx.fillStyle = "#e8e0d0";
+    ctx.fillRect(-12, hy - 22, 24, 12);
+    ctx.fillStyle = "#c0382a";
+    ctx.fillRect(-9, hy - 19, 6, 3);
+    ctx.fillRect(-3, hy - 16, 6, 3);
+    ctx.fillRect(3, hy - 19, 6, 3);
+  }
+  if (flags & SF.enrage) {
+    for (let i = 0; i < 7; i++) {
+      const up = (t * 1.4 + i * 0.14) % 1;
+      ctx.globalAlpha = (1 - up) * 0.9;
+      ctx.fillStyle = i % 2 ? "#ff5a2a" : "#ffb03a";
+      px(ctx, Math.sin(i * 1.9) * 22 * scale, -up * head, 9 - up * 6, 9 - up * 6);
+    }
+    ctx.globalAlpha = 0.4 + 0.2 * Math.sin(t * 8);
+    ctx.strokeStyle = "#ff3a2a";
+    ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.ellipse(0, 0, 34, 13, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+  ctx.restore();
 }
