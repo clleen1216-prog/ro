@@ -1406,10 +1406,11 @@ export function doAction(action: string) {
     return;
   }
   if (action === "heal") fullHeal();
-  else if (action === "shop-smith") world.shop = "smith";
-  else if (action === "shop-outfit") world.shop = "outfit";
-  else if (action === "shop-supply") world.shop = "supply";
-  else if (action === "storage") world.storageOpen = true;
+  else if (action === "shop-smith" || action === "shop-outfit" || action === "shop-supply" || action === "storage") {
+    for (const key of Object.keys(world.panels) as (keyof typeof world.panels)[]) world.panels[key] = false;
+    if (action === "storage") world.storageOpen = true;
+    else world.shop = action === "shop-smith" ? "smith" : action === "shop-outfit" ? "outfit" : "supply";
+  }
   else if (action === "save") {
     persist();
     log("Maela files your record.");
@@ -1435,9 +1436,9 @@ export function doAction(action: string) {
 
 export function togglePanel(name: keyof typeof world.panels) {
   const open = !world.panels[name];
-  if (world.viewW < 760) {
-    for (const key of Object.keys(world.panels) as (keyof typeof world.panels)[]) world.panels[key] = false;
-  }
+  for (const key of Object.keys(world.panels) as (keyof typeof world.panels)[]) world.panels[key] = false;
+  world.shop = null;
+  world.storageOpen = false;
   world.panels[name] = open;
   bump();
 }
